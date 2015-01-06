@@ -36,22 +36,59 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Microsoft.CodeAnalysis">
+      <HintPath>..\packages\Microsoft.CodeAnalysis.Common.1.0.0-beta1-20141031-01\lib\net45\Microsoft.CodeAnalysis.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp">
+      <HintPath>..\packages\Microsoft.CodeAnalysis.CSharp.1.0.0-beta1-20141031-01\lib\net45\Microsoft.CodeAnalysis.CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp.Desktop">
+      <HintPath>..\packages\Microsoft.CodeAnalysis.CSharp.1.0.0-beta1-20141031-01\lib\net45\Microsoft.CodeAnalysis.CSharp.Desktop.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis.Desktop">
+      <HintPath>..\packages\Microsoft.CodeAnalysis.Common.1.0.0-beta1-20141031-01\lib\net45\Microsoft.CodeAnalysis.Desktop.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Collections.Immutable, Version=1.1.32.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <Private>True</Private>
+      <HintPath>..\packages\System.Collections.Immutable.1.1.32-beta\lib\portable-net45+win8+wp8+wpa81\System.Collections.Immutable.dll</HintPath>
+    </Reference>
     <Reference Include="System.Core" />
+    <Reference Include="System.Reflection.Metadata">
+      <HintPath>..\packages\System.Reflection.Metadata.1.0.17-beta\lib\portable-net45+win8\System.Reflection.Metadata.dll</HintPath>
+    </Reference>
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="..\MiniBench.Core\BenchmarkResult.cs">
+      <Link>Core\BenchmarkResult.cs</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\BenchmarkAttribute.cs">
+      <Link>Core\BenchmarkAttribute.cs</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\CategoryAttribute.cs">
+      <Link>Core\CategoryAttribute.cs</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\IBenchmarkTarget.cs">
+      <Link>Core\IBenchmarkTarget.cs</Link>
+    </EmbeddedResource>
+    <Compile Include="BenchmarkTemplate.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MiniBench.Core\MiniBench.Core.csproj">
       <Project>{c1a5c977-180e-428c-8661-78c4381d9e42}</Project>
       <Name>MiniBench.Core</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\MiniBench.Demo\MiniBench.Demo.csproj">
+      <Project>{2457f6a9-a557-4106-9429-18b6433fbe09}</Project>
+      <Name>MiniBench.Demo</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

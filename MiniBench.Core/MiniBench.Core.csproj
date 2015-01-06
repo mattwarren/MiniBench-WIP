@@ -40,6 +40,7 @@
     <Compile Include="BenchmarkResult.cs" />
     <Compile Include="BenchmarkTarget.cs" />
     <Compile Include="CategoryAttribute.cs" />
+    <Compile Include="IBenchmarkTarget.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

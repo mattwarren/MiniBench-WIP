@@ -1,15 +1,18 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Reflection;
-using System.Text;
 
 namespace MiniBench.Core
 {
     public class AssemblyLoader : MarshalByRefObject
     {
-        public void Load(string name)
+        public Assembly Load(string name)
         {
-            Assembly.Load(name);
+            return Assembly.Load(name);
+        }
+
+        public Assembly Load(byte[] rawAssembly, byte[] rawSymbolStore)
+        {
+            return Assembly.Load(rawAssembly: rawAssembly, rawSymbolStore: rawSymbolStore);
         }
     }
 }

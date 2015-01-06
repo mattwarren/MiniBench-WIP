@@ -8,8 +8,8 @@ namespace MiniBench.Core
 {
     public sealed class BenchmarkResult : MarshalByRefObject
     {
-        private readonly BenchmarkTarget target;
-        public BenchmarkTarget Target { get { return target; } }
+        private readonly IBenchmarkTarget target;
+        public IBenchmarkTarget Target { get { return target; } }
 
         private readonly long iterations;
         public long Iterations { get { return iterations; } }
@@ -20,7 +20,7 @@ namespace MiniBench.Core
         private readonly string failure;
         public string Failure { get { return failure; } }
 
-        private BenchmarkResult(BenchmarkTarget target, long iterations, TimeSpan elapsedTime, string failure)
+        private BenchmarkResult(IBenchmarkTarget target, long iterations, TimeSpan elapsedTime, string failure)
         {
             this.target = target;
             this.iterations = iterations;
@@ -28,12 +28,12 @@ namespace MiniBench.Core
             this.failure = failure;
         }
 
-        internal static BenchmarkResult ForFailure(BenchmarkTarget target, string failure)
+        internal static BenchmarkResult ForFailure(IBenchmarkTarget target, string failure)
         {
             return new BenchmarkResult(target, 0, TimeSpan.Zero, failure);
         }
 
-        internal static BenchmarkResult ForSuccess(BenchmarkTarget target, long iterations, TimeSpan elapsedTime)
+        internal static BenchmarkResult ForSuccess(IBenchmarkTarget target, long iterations, TimeSpan elapsedTime)
         {
             return new BenchmarkResult(target, iterations, elapsedTime, null);
         }
@@ -42,7 +42,7 @@ namespace MiniBench.Core
         {
             return failure != null
                 ? string.Format("{0}: Failed: {1}", target, failure)
-                : string.Format("{0}: {1} iterations in {2}ms", target, iterations, (long) elapsedTime.TotalMilliseconds);
+                : string.Format("{0}: {1:N0} iterations in {2}ms", target, iterations, (long) elapsedTime.TotalMilliseconds);
         }
     }
 }

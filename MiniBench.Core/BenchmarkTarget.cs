@@ -11,11 +11,12 @@ using System.Runtime.Remoting;
 
 namespace MiniBench.Core
 {
-    public sealed class BenchmarkTarget : MarshalByRefObject
+    public sealed class BenchmarkTarget : MarshalByRefObject, IBenchmarkTarget
     {
         // The non-generic Action delegate was introduced in .NET 3.5.
         // This is the equivalent.
         private delegate void MinibenchAction();
+        private delegate object MinibenchFunc();
 
         private readonly Type type;
         private readonly MethodInfo method;
@@ -27,7 +28,7 @@ namespace MiniBench.Core
         public string Method { get { return method.Name; } }
 
         private readonly ReadOnlyCollection<string> categories;
-        public ReadOnlyCollection<string> Categories { get { return categories; } }  
+        public ReadOnlyCollection<string> Categories { get { return categories; } }
 
         internal BenchmarkTarget(Type type, MethodInfo method)
         {
@@ -46,6 +47,15 @@ namespace MiniBench.Core
             try
             {
                 object instance = Activator.CreateInstance(type);
+
+                if (method.ReturnType != typeof(void))
+                {
+                    MinibenchFunc func = (MinibenchFunc) Delegate.CreateDelegate(typeof(MinibenchFunc), instance, method);
+                    object result = func();
+                    Console.WriteLine("Non-void return type: {0}, result = {1}", method.ToString(), result);
+                    return BenchmarkResult.ForFailure(this, method.ToString());
+                }
+
                 MinibenchAction action = (MinibenchAction) Delegate.CreateDelegate(typeof(MinibenchAction), instance, method);
                 // Make sure the method is JIT-compiled.
                 action();
@@ -60,7 +70,7 @@ namespace MiniBench.Core
                     warmupIterations++;
                 }
                 stopwatch.Stop();
-                Console.WriteLine("{0} iterations in {1}ms", warmupIterations, (long) stopwatch.ElapsedMilliseconds);
+                Console.WriteLine("Warmup {0:N0} iterations in {1}ms", warmupIterations, (long) stopwatch.ElapsedMilliseconds);
                 double ratio = targetTime.TotalSeconds / stopwatch.Elapsed.TotalSeconds;
                 long iterations = (long) (warmupIterations * ratio);
                 GC.Collect();
