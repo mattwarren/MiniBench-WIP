@@ -1,0 +1,76 @@
+<html>
+<h1> MeasureIt Performance Results </h1>
+<p>
+Below are the results of running a series of benchmarks.  Use the
+<b>MeasureIt /usersGuide</b> for more details on exactly what the benchmarks do.
+</p><p>
+It is very easy for benchmark results to be wrong or misleading.  You should read the guidance
+in the <b>MeasureIt /usersGuide</b> before making important decisions based on this data.
+</p><p>
+To improve the stability of the measurements, a may be cloned several times
+and this cloned code is then run in a loop.
+If the benchmark was cloned the 'scale' attribute represents the number of times
+it was cloned, and the count represents the number of times the cloned code was run in a loop
+before the measurement was made.    The reported number divides by both
+of these values, so it represents a single instance of the operation being measured.
+</p>
+<p>
+The benchmarks data can vary from run to run, so the benchmark is run several times and
+the statistics are displayed.  If we assume a normal distribution, you can expect 68% of all measureuments
+to fall within 1 StdDev of the Mean.   You can expect over 95% of all measurements
+to fall witin 2 StdDev of the Mean.   Thus 2 StdDev is a good error bound.
+Keep in mind, however that it is not uncommon for the statistics to be quite stable
+during a run and yet very widely across different runs.  See the users guide for more.
+</p>
+<p>
+Generally the mean is a better measurment if you use the number to compute an
+aggregate throughput for a large number of items.  The median is a better
+guess if you want to best guess of a typical sample.   The median is also
+more stable if the sample is noisy (eg has outliers).
+</p>
+<h3>Data collected</h3>
+<p>
+Scaled where EmptyStaticFunction = 1.0 (1.5 nsec = 1.0 units)
+</p>
+<table border>
+<tr><th>Name</th><th>Median</th><th>Mean</th><th>StdDev</th><th>Min</th><th>Max</th><th>Samples</th><th>Raw Results</th></tr>
+<tr><td>NOTHING  [count=10,000]</td><td>0.000</td><td>0.038</td><td>0.173</td><td>-0.027</td><td>0.790</td><td>20</td><td>-0.00004000015, -0.00004000015, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, -0.0000000001525879, 0.00003999985, 0.00118</td></tr>
+<tr bgcolor="#819FF7"><td>MethodCalls: EmptyStaticFunction()  [count=10,000  scale=10.0]</td><td>1.000</td><td>1.005</td><td>0.018</td><td>1.000</td><td>1.084</td><td>20</td><td>0.001494, 0.001494, 0.001494, 0.001494, 0.001494, 0.001494, 0.001494, 0.001494, 0.001494, 0.001494, 0.001494, 0.001494, 0.001494, 0.001497, 0.001497, 0.001497, 0.001497, 0.001497, 0.001497, 0.001619</td></tr>
+<tr><td>Loop 1K times  [count=10,000]</td><td>54.662</td><td>55.344</td><td>5.527</td><td>51.238</td><td>78.313</td><td>20</td><td>0.07655, 0.07708, 0.07724, 0.07788, 0.078, 0.07895, 0.0799, 0.08043, 0.08123, 0.08157, 0.08176, 0.08203, 0.08218, 0.08294, 0.08313, 0.08339, 0.08339, 0.08339, 0.08564, 0.117</td></tr>
+<tr><td>MethodCalls: EmptyStaticFunction(arg1,...arg5)  [count=10,000  scale=10.0]</td><td>1.099</td><td>1.143</td><td>0.110</td><td>1.061</td><td>1.529</td><td>20</td><td>0.001585, 0.001585, 0.001585, 0.001589, 0.001611, 0.001615, 0.001623, 0.001638, 0.001642, 0.001642, 0.001642, 0.001668, 0.001668, 0.001672, 0.001699, 0.001725, 0.001893, 0.001893, 0.001897, 0.002284</td></tr>
+<tr><td>MethodCalls: aClass.EmptyInstanceFunction()  [count=10,000  scale=10.0]</td><td>0.998</td><td>1.043</td><td>0.107</td><td>0.951</td><td>1.382</td><td>20</td><td>0.001421, 0.001421, 0.001421, 0.001448, 0.001448, 0.001448, 0.001448, 0.001448, 0.001448, 0.001448, 0.001535, 0.001558, 0.001558, 0.001589, 0.001589, 0.001665, 0.001699, 0.001703, 0.001805, 0.002064</td></tr>
+<tr><td>MethodCalls: aClass.Interface()  [count=10,000  scale=10.0]</td><td>1.338</td><td>1.377</td><td>0.085</td><td>1.335</td><td>1.653</td><td>20</td><td>0.001995, 0.001995, 0.001995, 0.001995, 0.001995, 0.001995, 0.001995, 0.001995, 0.001999, 0.001999, 0.001999, 0.001999, 0.001999, 0.001999, 0.001999, 0.002018, 0.002231, 0.002242, 0.002242, 0.00247</td></tr>
+<tr><td>MethodCalls: aSealedClass.Interface() (inlined)  [count=10,000  scale=10.0]</td><td>0.000</td><td>0.001</td><td>0.002</td><td>0.000</td><td>0.010</td><td>20</td><td>-0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, 0.000003999992, 0.000003999992, 0.00001499999</td></tr>
+<tr><td>MethodCalls: aStructWithInterface.Interface() (inlined)  [count=10,000  scale=10.0]</td><td>0.000</td><td>0.009</td><td>0.024</td><td>0.000</td><td>0.092</td><td>20</td><td>-0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, -0.0000000000076294, 0.000003999992, 0.000003999992, 0.00001499999, 0.000095, 0.000137</td></tr>
+<tr><td>MethodCalls: aClass.VirtualMethod()  [count=10,000  scale=10.0]</td><td>0.822</td><td>0.992</td><td>0.312</td><td>0.819</td><td>1.827</td><td>20</td><td>0.001224, 0.001224, 0.001224, 0.001224, 0.001224, 0.001224, 0.001224, 0.001224, 0.001224, 0.001228, 0.001228, 0.001228, 0.001228, 0.001456, 0.001459, 0.001558, 0.001771, 0.002033, 0.002718, 0.002729</td></tr>
+<tr><td>MethodCalls: Class.ReturnsValueType()  [count=10,000  scale=10.0]</td><td>1.916</td><td>1.921</td><td>0.060</td><td>1.859</td><td>2.048</td><td>20</td><td>0.002778, 0.002778, 0.002778, 0.002778, 0.002778, 0.002778, 0.002778, 0.002862, 0.002862, 0.002862, 0.002862, 0.002862, 0.002866, 0.002866, 0.002866, 0.002942, 0.002991, 0.003018, 0.003025, 0.00306</td></tr>
+<tr><td>Delegates: new MyDelegate(aClass.EmptyInstanceFunction)  [count=10,000  scale=10.0]</td><td>5.764</td><td>6.324</td><td>1.682</td><td>5.641</td><td>12.187</td><td>20</td><td>0.008427, 0.008442, 0.008556, 0.008571, 0.008575, 0.008579, 0.008583, 0.008587, 0.00859, 0.008602, 0.008621, 0.008628, 0.008651, 0.008666, 0.008708, 0.008723, 0.008803, 0.008913, 0.015535, 0.018207</td></tr>
+<tr bgcolor="#819FF7"><td>Delegates: new MyDelegate(Class.StaticFunction)  [count=10,000  scale=10.0]</td><td>6.536</td><td>6.604</td><td>0.193</td><td>6.439</td><td>7.070</td><td>20</td><td>0.00962, 0.00962, 0.00962, 0.009624, 0.009636, 0.009658, 0.009666, 0.009666, 0.009693, 0.00975, 0.00978, 0.00983, 0.009845, 0.00989, 0.009921, 0.009932, 0.010168, 0.010396, 0.010442, 0.010563</td></tr>
+<tr><td>Delegates: aInstanceDelegate()  [count=10,000  scale=10.0]</td><td>0.839</td><td>0.875</td><td>0.074</td><td>0.837</td><td>1.066</td><td>20</td><td>0.00125, 0.00125, 0.00125, 0.00125, 0.00125, 0.001254, 0.001254, 0.001254, 0.001254, 0.001254, 0.001254, 0.001254, 0.001254, 0.001254, 0.001254, 0.001277, 0.001399, 0.001486, 0.001589, 0.001592</td></tr>
+<tr><td>Delegates: aStaticDelegate()  [count=10,000  scale=10.0]</td><td>1.175</td><td>1.213</td><td>0.052</td><td>1.173</td><td>1.313</td><td>20</td><td>0.001752, 0.001756, 0.001756, 0.001756, 0.001756, 0.001756, 0.001756, 0.001756, 0.001756, 0.001756, 0.001756, 0.001756, 0.001809, 0.001828, 0.001878, 0.001885, 0.001897, 0.001957, 0.001961, 0.001961</td></tr>
+<tr><td>MethodReflection: Non-reflection EmptyStaticFunction()   [count=10,000  scale=20.0]</td><td>0.625</td><td>0.634</td><td>0.024</td><td>0.614</td><td>0.686</td><td>20</td><td>0.000918, 0.000918, 0.000918, 0.000918, 0.000918, 0.000918, 0.000918, 0.000918, 0.00092, 0.00092, 0.0009465, 0.0009465, 0.0009485, 0.00095, 0.000958, 0.0009805, 0.000988, 0.000996, 0.0010205, 0.0010245</td></tr>
+<tr><td>MethodReflection: Non-reflection EmptyStaticFunction5Arg()   [count=10,000  scale=20.0]</td><td>0.788</td><td>0.805</td><td>0.042</td><td>0.763</td><td>0.910</td><td>20</td><td>0.00114, 0.00114, 0.001142, 0.0011765, 0.0011765, 0.0011765, 0.0011765, 0.0011765, 0.0011765, 0.001178, 0.001178, 0.001178, 0.001178, 0.001182, 0.0011955, 0.0012105, 0.001256, 0.0013, 0.001355, 0.001359</td></tr>
+<tr><td>MethodReflection: Method.Invoke EmptyStaticFunction()  [count=10,000  scale=20.0]</td><td>170.262</td><td>170.739</td><td>1.985</td><td>167.307</td><td>175.270</td><td>20</td><td>0.249956, 0.251828, 0.252178, 0.253164, 0.2534265, 0.2535385, 0.253548, 0.2537495, 0.253862, 0.254276, 0.254468, 0.2545515, 0.2545595, 0.2548955, 0.2559845, 0.2576745, 0.257697, 0.2594645, 0.2610155, 0.2618535</td></tr>
+<tr bgcolor="#819FF7"><td>MethodReflection: Method.Invoke EmptyStaticFunction() COMPILED  [count=10,000  scale=20.0]</td><td>1.179</td><td>1.256</td><td>0.132</td><td>1.175</td><td>1.671</td><td>20</td><td>0.001756, 0.001756, 0.001756, 0.001756, 0.001756, 0.001756, 0.001756, 0.001756, 0.001756, 0.001756, 0.0017675, 0.0018645, 0.001866, 0.001866, 0.001866, 0.001872, 0.002003, 0.002085, 0.002292, 0.002497</td></tr>
+<tr><td>MethodReflection: Method.Invoke EmptyStaticFunction5Arg()  [count=10,000  scale=20.0]</td><td>556.149</td><td>556.251</td><td>3.134</td><td>549.914</td><td>561.785</td><td>20</td><td>0.8215715, 0.823092, 0.825274, 0.8265755, 0.8276115, 0.829187, 0.8292515, 0.8298635, 0.829934, 0.830276, 0.831498, 0.8315305, 0.8328325, 0.8331025, 0.833241, 0.8356055, 0.836297, 0.8365155, 0.8382035, 0.839306</td></tr>
+</table>
+<p>
+<h2>Attributes of the machine used to collect the data</h2>
+<table border>
+<tr><th>Attribute</th><th>Value</th></tr>
+<tr><td>Computer Name</td><td>WARMA11-M4800</td><tr>
+<tr><td>Number of Processors</td><td>1</td><tr>
+<tr><td>Processor Name </td><td>Intel(R) Core(TM) i7-4800MQ CPU @ 2.70GHz</td><tr>
+<tr><td>Processor Mhz</td><td>2701</td><tr>
+<tr><td>Memory MBytes</td><td>16289</td><tr>
+<tr><td>L1 Cache KBytes</td><td>256</td><tr>
+<tr><td>L2 Cache KBytes</td><td>1024</td><tr>
+<tr><td>Operating System</td><td>Microsoft Windows 7 Enterprise </td><tr>
+<tr><td>Operating System Version</td><td>6.1.7601</td><tr>
+<tr><td>Stopwatch resolution (nsec)</td><td>380.115</td><tr>
+<tr><td>CompileType</td><td>JIT</td><tr>
+<tr><td>CodeSharing</td><td>AppDomainSpecific</td><tr>
+<tr><td>CodeOptimization</td><td>Optimized</td><tr>
+</table>
+</p>
+</html>

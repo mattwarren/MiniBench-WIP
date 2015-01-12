@@ -1,0 +1,64 @@
+<html>
+<h1> MeasureIt Performance Results </h1>
+<p>
+Below are the results of running a series of benchmarks.  Use the
+<b>MeasureIt /usersGuide</b> for more details on exactly what the benchmarks do.
+</p><p>
+It is very easy for benchmark results to be wrong or misleading.  You should read the guidance
+in the <b>MeasureIt /usersGuide</b> before making important decisions based on this data.
+</p><p>
+To improve the stability of the measurements, a may be cloned several times
+and this cloned code is then run in a loop.
+If the benchmark was cloned the 'scale' attribute represents the number of times
+it was cloned, and the count represents the number of times the cloned code was run in a loop
+before the measurement was made.    The reported number divides by both
+of these values, so it represents a single instance of the operation being measured.
+</p>
+<p>
+The benchmarks data can vary from run to run, so the benchmark is run several times and
+the statistics are displayed.  If we assume a normal distribution, you can expect 68% of all measureuments
+to fall within 1 StdDev of the Mean.   You can expect over 95% of all measurements
+to fall witin 2 StdDev of the Mean.   Thus 2 StdDev is a good error bound.
+Keep in mind, however that it is not uncommon for the statistics to be quite stable
+during a run and yet very widely across different runs.  See the users guide for more.
+</p>
+<p>
+Generally the mean is a better measurment if you use the number to compute an
+aggregate throughput for a large number of items.  The median is a better
+guess if you want to best guess of a typical sample.   The median is also
+more stable if the sample is noisy (eg has outliers).
+</p>
+<h3>Data collected</h3>
+<p>
+Scaled where EmptyStaticFunction = 1.0 (1.5 nsec = 1.0 units)
+</p>
+<table border>
+<tr><th>Name</th><th>Median</th><th>Mean</th><th>StdDev</th><th>Min</th><th>Max</th><th>Samples</th></tr>
+<tr><td>NOTHING  [count=10,000]</td><td>0.000</td><td>0.038</td><td>0.173</td><td>-0.027</td><td>0.790</td><td>20</td></tr>
+<tr bgcolor="#819FF7"><td>MethodCalls: EmptyStaticFunction()  [count=10,000  scale=10.0]</td><td>1.000</td><td>1.005</td><td>0.018</td><td>1.000</td><td>1.084</td><td>20</td></tr>
+<tr><td>Loop 1K times  [count=10,000]</td><td>54.662</td><td>55.344</td><td>5.527</td><td>51.238</td><td>78.313</td><td>20</td></tr>
+<tr><td>Delegates: new MyDelegate(Class.StaticFunction)  [count=10,000  scale=10.0]</td><td>6.536</td><td>6.604</td><td>0.193</td><td>6.439</td><td>7.070</td><td>20</td></tr>
+<tr><td>Delegates: aStaticDelegate()  [count=10,000  scale=10.0]</td><td>1.175</td><td>1.213</td><td>0.052</td><td>1.173</td><td>1.313</td><td>20</td></tr>
+<tr bgcolor="#819FF7"><td>MethodReflection: Method.Invoke EmptyStaticFunction()  [count=10,000  scale=20.0]</td><td>170.262</td><td>170.739</td><td>1.985</td><td>167.307</td><td>175.270</td><td>20</td></tr>
+<tr bgcolor="#819FF7"><td>MethodReflection: Method.Invoke EmptyStaticFunction() <b>COMPILED</b>  [count=10,000  scale=20.0]</td><td>1.179</td><td>1.256</td><td>0.132</td><td>1.175</td><td>1.671</td><td>20</td></tr>
+</table>
+<p>
+<h2>Attributes of the machine used to collect the data</h2>
+<table border>
+<tr><th>Attribute</th><th>Value</th></tr>
+<tr><td>Computer Name</td><td>WARMA11-M4800</td><tr>
+<tr><td>Number of Processors</td><td>1</td><tr>
+<tr><td>Processor Name </td><td>Intel(R) Core(TM) i7-4800MQ CPU @ 2.70GHz</td><tr>
+<tr><td>Processor Mhz</td><td>2701</td><tr>
+<tr><td>Memory MBytes</td><td>16289</td><tr>
+<tr><td>L1 Cache KBytes</td><td>256</td><tr>
+<tr><td>L2 Cache KBytes</td><td>1024</td><tr>
+<tr><td>Operating System</td><td>Microsoft Windows 7 Enterprise </td><tr>
+<tr><td>Operating System Version</td><td>6.1.7601</td><tr>
+<tr><td>Stopwatch resolution (nsec)</td><td>380.115</td><tr>
+<tr><td>CompileType</td><td>JIT</td><tr>
+<tr><td>CodeSharing</td><td>AppDomainSpecific</td><tr>
+<tr><td>CodeOptimization</td><td>Optimized</td><tr>
+</table>
+</p>
+</html>
