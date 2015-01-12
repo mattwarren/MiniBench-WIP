@@ -48,7 +48,7 @@ namespace MiniBench.Demo
             return DateTime.Now.ToString();
         }
 
-        //[Benchmark]
+        [Benchmark]
         [Category("Testing")]
         public void DateTimeUtcNow()
         {

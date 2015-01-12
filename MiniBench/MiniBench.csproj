@@ -74,6 +74,7 @@
       <Link>Core\IBenchmarkTarget.cs</Link>
     </EmbeddedResource>
     <Compile Include="BenchmarkTemplate.cs" />
+    <Compile Include="CodeGenerator.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

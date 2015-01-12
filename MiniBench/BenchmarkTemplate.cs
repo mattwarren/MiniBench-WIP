@@ -32,7 +32,7 @@ namespace MiniBench.Benchmarks
         public string Type { get { return @type; } }
 
         private readonly string @method = ""##METHOD-NAME##"";
-        public string Method { get { return@method; } }
+        public string Method { get { return @method; } }
 
         private readonly ReadOnlyCollection<string> categories;
         public ReadOnlyCollection<string> Categories { get { return categories; } }
@@ -108,9 +108,9 @@ namespace MiniBench.Benchmarks
     {
         static void Main(string[] args)
         {
-            // This is just tempoary, will eventually spin-up an App-Domain and all that good stuff
-            BenchmarkResult result = ##RUNNER-NAME##;
-            Console.WriteLine(""Result: ""  + result);
+            // This is just temporary, will eventually spin-up an App-Domain and all that good stuff
+            //BenchmarkResult result = ##RUNNER-NAME##;
+            //Console.WriteLine(""Result: ""  + result);
         }
     }
 }";
