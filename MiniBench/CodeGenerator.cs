@@ -71,26 +71,23 @@ namespace MiniBench
                                             namespaceName.Replace('.', '_'),
                                             className,
                                             methodName);
-                var generatedBenchmark = BenchmarkTemplate.ProcessTemplates(namespaceName, className, methodName, generatedClassName);
+                var generatedBenchmark = BenchmarkTemplate.ProcessCodeTemplates(namespaceName, className, methodName, generatedClassName);
                 var generatedRunnerTree = CSharpSyntaxTree.ParseText(generatedBenchmark, options: parseOptions);
                 generatedRunners.Add(generatedRunnerTree);
                 var fileName = string.Format(generatedClassName + ".cs");
                 File.WriteAllText(Path.Combine(outputDirectory, fileName), generatedRunnerTree.GetRoot().ToFullString());
-                Console.WriteLine("Wrote generated file: " + fileName);
+                Console.WriteLine("Generated file: " + fileName);
             }
             return generatedRunners;
         }
 
         private SyntaxTree GenerateLauncher(string outputDirectory)
         {
-            //var launcherCode = string.Format("new {0}().RunTest(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10))", generatedClassName);
-            var launcherCode = "";
-            var generatedLauncher = BenchmarkTemplate.benchmarkLauncherTemplate
-                                .Replace(BenchmarkTemplate.launcherReplaceText, launcherCode);
+            var generatedLauncher = BenchmarkTemplate.ProcessLauncherTemplate();
             var generatedLauncherTree = CSharpSyntaxTree.ParseText(generatedLauncher, options: parseOptions);
             var fileName = "Generated_Launcher.cs";
             File.WriteAllText(Path.Combine(outputDirectory, fileName), generatedLauncherTree.GetRoot().ToFullString());
-            Console.WriteLine("Wrote generated file: " + fileName);
+            Console.WriteLine("Generated file: " + fileName);
 
             return generatedLauncherTree;
         }

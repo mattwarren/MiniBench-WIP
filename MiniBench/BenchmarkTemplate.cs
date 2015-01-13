@@ -3,13 +3,13 @@ namespace MiniBench
 {
     class BenchmarkTemplate
     {
-        internal static string namespaceReplaceText = "##NAMESPACE-NAME##";
-        internal static string classReplaceText = "##CLASS-NAME##";
-        internal static string methodReplaceText = "##METHOD-NAME##";
-        internal static string methodParametersReplaceText = "##METHOD-PARAMETERS##";
-        internal static string generatedClassReplaceText = "##GENERAGED-CLASS-NAME##";
+        private static string namespaceReplaceText = "##NAMESPACE-NAME##";
+        private static string classReplaceText = "##CLASS-NAME##";
+        private static string methodReplaceText = "##METHOD-NAME##";
+        private static string methodParametersReplaceText = "##METHOD-PARAMETERS##";
+        private static string generatedClassReplaceText = "##GENERAGED-CLASS-NAME##";
 
-        internal static string benchmarkHarnessTemplate =
+        private static string benchmarkHarnessTemplate =
 @"using MiniBench.Core;
 using ##NAMESPACE-NAME##;
 using System;
@@ -92,10 +92,10 @@ namespace MiniBench.Benchmarks
     }
 }";
 
-        internal static string launcherReplaceText = "##RUNNER-NAME##";
-        internal static string benchmarkLauncherTemplate =
+        private static string benchmarkLauncherTemplate =
 @"using System;
 using MiniBench.Core;
+using System.Reflection;
 
 namespace MiniBench.Benchmarks
 {
@@ -103,14 +103,31 @@ namespace MiniBench.Benchmarks
     {
         static void Main(string[] args)
         {
-            // This is just temporary, will eventually spin-up an App-Domain and all that good stuff
-            //BenchmarkResult result = ##RUNNER-NAME##;
-            //Console.WriteLine(""Result: ""  + result);
+            // TODO spin-up a new App-Domain and execute the benchmark in that
+            Assembly assembly = Assembly.GetExecutingAssembly();
+            foreach (Type type in assembly.GetTypes())
+            {
+                if (!type.IsClass || !type.IsPublic || type.IsAbstract ||
+                    typeof(IBenchmarkTarget).IsAssignableFrom(type) == false)
+                {
+                    continue;
+                }
+
+                Console.WriteLine(""Found: "" + type.Name);
+                IBenchmarkTarget obj = assembly.CreateInstance(type.FullName) as IBenchmarkTarget;
+                if (obj == null)
+                {
+                    Console.WriteLine(""Unable to create type: "" + type.Name);
+                    continue;
+                }
+                BenchmarkResult result = obj.RunTest(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10));
+                Console.WriteLine(result + ""\n"");
+            }
         }
     }
 }";
 
-        internal static string ProcessTemplates(string namespaceName, string className, string methodName, string generatedClassName)
+        internal static string ProcessCodeTemplates(string namespaceName, string className, string methodName, string generatedClassName)
         {
             // TODO at some point, we might need a less-hacky templating mechanism?!
             var generatedBenchmark = BenchmarkTemplate.benchmarkHarnessTemplate
@@ -120,6 +137,11 @@ namespace MiniBench.Benchmarks
                                 .Replace(BenchmarkTemplate.methodParametersReplaceText, "")
                                 .Replace(BenchmarkTemplate.generatedClassReplaceText, generatedClassName);
             return generatedBenchmark;
+        }
+
+        internal static string ProcessLauncherTemplate()
+        {
+            return benchmarkLauncherTemplate;
         }
     }
 }
