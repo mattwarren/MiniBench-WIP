@@ -6,11 +6,11 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiniBench.Core", "MiniBench.Core\MiniBench.Core.csproj", "{C1A5C977-180E-428C-8661-78C4381D9E42}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiniBench.Demo", "MiniBench.Demo\MiniBench.Demo.csproj", "{2457F6A9-A557-4106-9429-18B6433FBE09}"
+	ProjectSection(ProjectDependencies) = postProject
+		{EB051CB9-7B65-4429-9D64-4AE72B0E6B70} = {EB051CB9-7B65-4429-9D64-4AE72B0E6B70}
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiniBench", "MiniBench\MiniBench.csproj", "{EB051CB9-7B65-4429-9D64-4AE72B0E6B70}"
-	ProjectSection(ProjectDependencies) = postProject
-		{2457F6A9-A557-4106-9429-18B6433FBE09} = {2457F6A9-A557-4106-9429-18B6433FBE09}
-	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

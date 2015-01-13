@@ -13,7 +13,7 @@ namespace MiniBench
     {
         static void Main(string[] args)
         {
-            string fileToBenchmark = args[1];
+            string fileToBenchmark = args[0];
             string extension = Path.GetExtension(fileToBenchmark);
 
             AppDomain domain = AppDomain.CreateDomain("MiniBench runner", new Evidence(), Environment.CurrentDirectory, Environment.CurrentDirectory, shadowCopyFiles: false);
@@ -24,25 +24,25 @@ namespace MiniBench
             {
                 AssemblyName assembly = AssemblyName.GetAssemblyName(fileToBenchmark);
                 Console.WriteLine("Loading Benchmark Assembly from disk: {0}\n", assembly.FullName);
-                loadedAssembly = loader.Load(assembly.FullName); // fileToBenchmark);
+                loadedAssembly = loader.Load(assembly.FullName);
+
+                var probe = CreateInstance<BenchmarkProbe>(domain);
+                IBenchmarkTarget[] targets = probe.Probe(loadedAssembly);
+
+                foreach (var target in targets)
+                {
+                    var result = target.RunTest(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10));
+                    Console.WriteLine(result);
+                }
             }
             else if (extension == ".cs")
             {
                 var peStream = new MemoryStream();
-                var pdbMemoryStream = new MemoryStream();
-                Console.WriteLine("Compiling Benchmark code into an Assembly: {0}\n", fileToBenchmark);
-                var generator = new CodeGenerator(peStream, pdbMemoryStream);
+                var pdbStream = new MemoryStream();
+                Console.WriteLine("Compiling Benchmark code into an self-contained Benchmark.exe: {0}\n", fileToBenchmark);
+                var generator = new CodeGenerator(peStream, pdbStream);
                 generator.GenerateCode(File.ReadAllText(fileToBenchmark));
-                loadedAssembly = loader.Load(rawAssembly: peStream.GetBuffer(), rawSymbolStore: pdbMemoryStream.GetBuffer());
-            }
-
-            var probe = CreateInstance<BenchmarkProbe>(domain);
-            BenchmarkTarget[] targets = probe.Probe(loadedAssembly);
-
-            foreach (var target in targets)
-            {
-                var result = target.RunTest(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10));
-                Console.WriteLine(result);
+                //loadedAssembly = loader.Load(rawAssembly: peStream.GetBuffer(), rawSymbolStore: pdbStream.GetBuffer());
             }
         }
 

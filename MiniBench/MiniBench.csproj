@@ -87,10 +87,6 @@
       <Project>{c1a5c977-180e-428c-8661-78c4381d9e42}</Project>
       <Name>MiniBench.Core</Name>
     </ProjectReference>
-    <ProjectReference Include="..\MiniBench.Demo\MiniBench.Demo.csproj">
-      <Project>{2457f6a9-a557-4106-9429-18b6433fbe09}</Project>
-      <Name>MiniBench.Demo</Name>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

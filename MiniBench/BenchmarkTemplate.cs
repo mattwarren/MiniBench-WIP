@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
+﻿
 namespace MiniBench
 {
     class BenchmarkTemplate
@@ -114,5 +109,17 @@ namespace MiniBench.Benchmarks
         }
     }
 }";
+
+        internal static string ProcessTemplates(string namespaceName, string className, string methodName, string generatedClassName)
+        {
+            // TODO at some point, we might need a less-hacky templating mechanism?!
+            var generatedBenchmark = BenchmarkTemplate.benchmarkHarnessTemplate
+                                .Replace(BenchmarkTemplate.namespaceReplaceText, namespaceName)
+                                .Replace(BenchmarkTemplate.classReplaceText, className)
+                                .Replace(BenchmarkTemplate.methodReplaceText, methodName)
+                                .Replace(BenchmarkTemplate.methodParametersReplaceText, "")
+                                .Replace(BenchmarkTemplate.generatedClassReplaceText, generatedClassName);
+            return generatedBenchmark;
+        }
     }
 }

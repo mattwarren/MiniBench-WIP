@@ -9,7 +9,7 @@ namespace MiniBench.Demo
         Boolean debug = false;
         //Boolean debug = true;
 
-        //[Benchmark]
+        [Benchmark]
         [Category("Testing")]
         public void DateTimeNow()
         {
@@ -55,7 +55,7 @@ namespace MiniBench.Demo
             DateTime.UtcNow.ToString();
         }
 
-        //[Benchmark]
+        [Benchmark]
         [Category("Testing")]
         public void MathSqrt()
         {

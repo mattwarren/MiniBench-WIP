@@ -7,9 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace MiniBench
 {
@@ -40,64 +38,59 @@ namespace MiniBench
             var className = @class.Identifier.ToString();
             var allMethods = NodesOfType<MethodDeclarationSyntax>(benchmarkTree);
 
-            var generatedRunners = GenerateRunners(allMethods, namespaceName, className);
-            var embeddedCodeTrees = GenerateEmbeddedCode();
-            var generatedLauncherTree = GenerateLauncher();
-
-            var allSyntaxTrees = new List<SyntaxTree>(embeddedCodeTrees);
+            var outputDirectory = Environment.CurrentDirectory;
+            var allSyntaxTrees = new List<SyntaxTree>(GenerateEmbeddedCode());
             allSyntaxTrees.Add(benchmarkTree);
-            allSyntaxTrees.AddRange(generatedRunners);
-            allSyntaxTrees.Add(generatedLauncherTree);
+            allSyntaxTrees.AddRange(GenerateRunners(allMethods, namespaceName, className, outputDirectory));
+            allSyntaxTrees.Add(GenerateLauncher(outputDirectory));
 
-            CompileAllCode(allSyntaxTrees, emitToDisk: true);
+            CompileAndEmitCode(allSyntaxTrees, emitToDisk: true);
         }
 
-        private List<SyntaxTree> GenerateRunners(IList<MethodDeclarationSyntax> methods, string namespaceName, string className)
+        private List<SyntaxTree> GenerateRunners(IList<MethodDeclarationSyntax> methods, string namespaceName, string className, string outputDirectory)
         {
+            var filePrefix = "Generated_Runner";
+            foreach (var existingGeneratedFile in Directory.EnumerateFiles(outputDirectory, filePrefix + "*"))
+            {
+                File.Delete(existingGeneratedFile);
+            }
+
             var modifiers = methods.Select(m => m.Modifiers).ToList();
             var benchmarkAttribute = typeof(BenchmarkAttribute).Name.Replace("Attribute", "");
-            var attributes = methods.Select(m => m.AttributeLists.SelectMany(atrl => atrl.Attributes).ToList()).ToList();
             var validMethods = methods.Where(m => m.Modifiers.Any(mod => mod.CSharpKind() == SyntaxKind.PublicKeyword))
-                                      .Where(m => m.AttributeLists.SelectMany(atrl => atrl.Attributes).Any(atr => atr.Name.ToString() == benchmarkAttribute))
+                                      .Where(m => m.AttributeLists.SelectMany(atrl => atrl.Attributes)
+                                                                  .Any(atr => atr.Name.ToString() == benchmarkAttribute))
                                       .ToList();
             var generatedRunners = new List<SyntaxTree>(validMethods.Count);
             foreach (var method in validMethods)
             {
                 var methodName = method.Identifier.ToString();
                 // Can't have '.' or '-' in class names (which is where this gets used)
-                var generatedClassName = string.Format("Generated_Runner_{0}_{1}_{2}",
+                var generatedClassName = string.Format("{0}_{1}_{2}_{3}",
+                                            filePrefix,
                                             namespaceName.Replace('.', '_'),
                                             className,
                                             methodName);
-                var generatedBenchmark = ProcessTemplates(namespaceName, className, methodName, generatedClassName);
+                var generatedBenchmark = BenchmarkTemplate.ProcessTemplates(namespaceName, className, methodName, generatedClassName);
                 var generatedRunnerTree = CSharpSyntaxTree.ParseText(generatedBenchmark, options: parseOptions);
                 generatedRunners.Add(generatedRunnerTree);
                 var fileName = string.Format(generatedClassName + ".cs");
-                File.WriteAllText(fileName, generatedRunnerTree.GetRoot().ToFullString());
+                File.WriteAllText(Path.Combine(outputDirectory, fileName), generatedRunnerTree.GetRoot().ToFullString());
+                Console.WriteLine("Wrote generated file: " + fileName);
             }
             return generatedRunners;
         }
 
-        private string ProcessTemplates(string namespaceName, string className, string methodName, string generatedClassName)
-        {
-            // TODO at some point, we might need a less-hacky templating mechanism?!
-            var generatedBenchmark = BenchmarkTemplate.benchmarkHarnessTemplate
-                                .Replace(BenchmarkTemplate.namespaceReplaceText, namespaceName)
-                                .Replace(BenchmarkTemplate.classReplaceText, className)
-                                .Replace(BenchmarkTemplate.methodReplaceText, methodName)
-                                .Replace(BenchmarkTemplate.methodParametersReplaceText, "")
-                                .Replace(BenchmarkTemplate.generatedClassReplaceText, generatedClassName);
-            return generatedBenchmark;
-        }
-
-        private SyntaxTree GenerateLauncher()
+        private SyntaxTree GenerateLauncher(string outputDirectory)
         {
             //var launcherCode = string.Format("new {0}().RunTest(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10))", generatedClassName);
             var launcherCode = "";
             var generatedLauncher = BenchmarkTemplate.benchmarkLauncherTemplate
                                 .Replace(BenchmarkTemplate.launcherReplaceText, launcherCode);
             var generatedLauncherTree = CSharpSyntaxTree.ParseText(generatedLauncher, options: parseOptions);
-            File.WriteAllText("Generated_Launcher.cs", generatedLauncherTree.GetRoot().ToFullString());
+            var fileName = "Generated_Launcher.cs";
+            File.WriteAllText(Path.Combine(outputDirectory, fileName), generatedLauncherTree.GetRoot().ToFullString());
+            Console.WriteLine("Wrote generated file: " + fileName);
 
             return generatedLauncherTree;
         }
@@ -116,7 +109,7 @@ namespace MiniBench
             return embeddedCodeTrees;
         }
 
-        private void CompileAllCode(List<SyntaxTree> allSyntaxTrees, bool emitToDisk)
+        private void CompileAndEmitCode(List<SyntaxTree> allSyntaxTrees, bool emitToDisk)
         {
             // TODO Maybe re-write this using the Fluent-API, as shown here  http://roslyn.codeplex.com/discussions/541557
             var compilationOptions = new CSharpCompilationOptions(
@@ -126,14 +119,12 @@ namespace MiniBench
             var compilation = CSharpCompilation.Create(generatedCodeName, allSyntaxTrees, GetRequiredReferences(), compilationOptions);
             var result = compilation.Emit(peStream: peStream, pdbStream: pdbStream, cancellationToken: CancellationToken.None);
             Console.WriteLine("Emit in-memory Success: {0}\n  {1}", result.Success, string.Join("\n  ", result.Diagnostics));
-            Console.WriteLine("\npeStream position = {0:N0} (length = {1:N0}), pdbStream position = {2:N0} (length = {3:N0})\n",
-                                peStream.Position, peStream.Length, pdbStream.Position, pdbStream.Length);
 
             if (emitToDisk)
             {
                 // Write them to disk for debugging
                 Console.WriteLine("Current directory: " + Environment.CurrentDirectory);
-                var emitToDiskResult = compilation.Emit(outputPath: generatedCodeName + ".exe", // ".dll", 
+                var emitToDiskResult = compilation.Emit(outputPath: generatedCodeName + ".exe",
                                                         pdbPath: generatedCodeName + ".pdb",
                                                         xmlDocumentationPath: generatedCodeName + ".xml");
                 Console.WriteLine("Emit to disk   Success: {0}", emitToDiskResult.Success);
