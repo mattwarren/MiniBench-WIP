@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using MiniBench.Core;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -50,10 +51,13 @@ namespace MiniBench
         private List<SyntaxTree> GenerateRunners(IList<MethodDeclarationSyntax> methods, string namespaceName, string className, string outputDirectory)
         {
             var filePrefix = "Generated_Runner";
+            var fileDeletionTimer = Stopwatch.StartNew();
             foreach (var existingGeneratedFile in Directory.EnumerateFiles(outputDirectory, filePrefix + "*"))
             {
                 File.Delete(existingGeneratedFile);
             }
+            fileDeletionTimer.Stop();
+            Console.WriteLine("Took {0} ({1,5:N0}ms) - to delete existing files from disk", fileDeletionTimer.Elapsed, fileDeletionTimer.ElapsedMilliseconds);
 
             var modifiers = methods.Select(m => m.Modifiers).ToList();
             var benchmarkAttribute = typeof(BenchmarkAttribute).Name.Replace("Attribute", "");
@@ -71,12 +75,19 @@ namespace MiniBench
                                             namespaceName.Replace('.', '_'),
                                             className,
                                             methodName);
+                var codeGenTimer = Stopwatch.StartNew();
                 var generatedBenchmark = BenchmarkTemplate.ProcessCodeTemplates(namespaceName, className, methodName, generatedClassName);
                 var generatedRunnerTree = CSharpSyntaxTree.ParseText(generatedBenchmark, options: parseOptions);
                 generatedRunners.Add(generatedRunnerTree);
+                codeGenTimer.Stop();
+                Console.WriteLine("Took {0} ({1,5:N0}ms) - generated CSharp Syntx Tree", codeGenTimer.Elapsed, codeGenTimer.ElapsedMilliseconds);
+
                 var fileName = string.Format(generatedClassName + ".cs");
+                var fileWriteTimer = Stopwatch.StartNew();
                 File.WriteAllText(Path.Combine(outputDirectory, fileName), generatedRunnerTree.GetRoot().ToFullString());
+                fileWriteTimer.Stop();
                 Console.WriteLine("Generated file: " + fileName);
+                Console.WriteLine("Took {0} ({1,5:N0}ms) - to write file to disk", fileWriteTimer.Elapsed, fileWriteTimer.ElapsedMilliseconds);
             }
             return generatedRunners;
         }
@@ -120,18 +131,25 @@ namespace MiniBench
                                             mainTypeName: "MiniBench.Benchmarks.Program",
                                             optimizationLevel: OptimizationLevel.Release);
             var generatedCodeName = "Benchmark";
+            var codeEmitTimer = Stopwatch.StartNew();
             var compilation = CSharpCompilation.Create(generatedCodeName, allSyntaxTrees, GetRequiredReferences(), compilationOptions);
             var result = compilation.Emit(peStream: peStream, pdbStream: pdbStream, cancellationToken: CancellationToken.None);
+            codeEmitTimer.Stop();
             Console.WriteLine("Emit in-memory Success: {0}\n  {1}", result.Success, string.Join("\n  ", result.Diagnostics));
+            Console.WriteLine("Took {0} ({1,5:N0}ms) - to emit all generated code IN-MEMORY", codeEmitTimer.Elapsed, codeEmitTimer.ElapsedMilliseconds);
 
             if (emitToDisk)
             {
                 // Write them to disk for debugging
                 Console.WriteLine("Current directory: " + Environment.CurrentDirectory);
+                var codeEmitToDiskTimer = Stopwatch.StartNew();
                 var emitToDiskResult = compilation.Emit(outputPath: generatedCodeName + ".exe",
                                                         pdbPath: generatedCodeName + ".pdb",
                                                         xmlDocumentationPath: generatedCodeName + ".xml");
                 Console.WriteLine("Emit to disk Success: {0}", emitToDiskResult.Success);
+                codeEmitToDiskTimer.Stop();
+                Console.WriteLine("Emit in-memory Success: {0}\n  {1}", result.Success, string.Join("\n  ", result.Diagnostics));
+                Console.WriteLine("Took {0} ({1,5:N0}ms) - to emit generated code TO DISK", codeEmitToDiskTimer.Elapsed, codeEmitToDiskTimer.ElapsedMilliseconds);
             }
         }
 
