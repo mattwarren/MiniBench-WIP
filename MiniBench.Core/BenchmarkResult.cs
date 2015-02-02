@@ -42,7 +42,7 @@ namespace MiniBench.Core
         {
             return failure != null
                 ? string.Format("{0}: Failed: {1}", target, failure)
-                : string.Format("{0}: {1:N0} iterations in {2}ms", target, iterations, (long) elapsedTime.TotalMilliseconds);
+                : string.Format("{0}: {1:N0} iterations in {2:N2}ms", target, iterations, elapsedTime.TotalMilliseconds);
         }
     }
 }

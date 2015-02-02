@@ -1,5 +1,4 @@
-﻿
-namespace MiniBench
+﻿namespace MiniBench
 {
     class BenchmarkTemplate
     {

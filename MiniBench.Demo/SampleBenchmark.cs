@@ -1,6 +1,7 @@
 ﻿using MiniBench.Core;
 using System;
 using System.Diagnostics;
+using Xunit;
 
 namespace MiniBench.Demo
 {
@@ -9,7 +10,34 @@ namespace MiniBench.Demo
         Boolean debug = false;
         //Boolean debug = true;
 
+        private static int DemoTestRunCount = 0;
+
+        static void Main(string[] args)
+        {
+        }
+
+        [Fact]
+        static void BasicTest()
+        {
+            DemoTestRunCount = 0;
+            Options opt = new OptionsBuilder()
+                    .Include(typeof(SampleBenchmark))
+                    //.forks(1)
+                    .Build();
+            new Runner(opt).Run();
+
+            Assert.True(DemoTestRunCount > 0);
+            Console.WriteLine("After test, DemoTestRunCount = {0:N0}", DemoTestRunCount);
+        }
+
         [Benchmark]
+        public void DemoTest()
+        {
+            DemoTestRunCount++;
+        }
+
+
+        //[Benchmark]
         [Category("Testing")]
         public void DateTimeNow()
         {
@@ -41,21 +69,21 @@ namespace MiniBench.Demo
             //00000033  ret 
         }
 
-        [Benchmark]
+        //[Benchmark]
         [Category("Testing")]
         public string DateTimeNowFixed()
         {
             return DateTime.Now.ToString();
         }
 
-        [Benchmark]
+        //[Benchmark]
         [Category("Testing")]
         public void DateTimeUtcNow()
         {
             DateTime.UtcNow.ToString();
         }
 
-        [Benchmark]
+        //[Benchmark]
         [Category("Testing")]
         public void MathSqrt()
         {

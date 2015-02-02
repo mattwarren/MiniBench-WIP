@@ -73,6 +73,15 @@
     <EmbeddedResource Include="..\MiniBench.Core\IBenchmarkTarget.cs">
       <Link>Core\IBenchmarkTarget.cs</Link>
     </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\Options.cs">
+      <Link>Core\Options.cs</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\OptionsBuilder.cs">
+      <Link>Core\OptionsBuilder.cs</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\Runner.cs">
+      <Link>Core\Runner.cs</Link>
+    </EmbeddedResource>
     <Compile Include="BenchmarkTemplate.cs" />
     <Compile Include="CodeGenerator.cs" />
     <Compile Include="Program.cs" />

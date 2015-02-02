@@ -94,7 +94,13 @@ namespace MiniBench
 
         private List<SyntaxTree> GenerateEmbeddedCode()
         {
-            var embeddedCodeFiles = new[] { "BenchmarkAttribute.cs", "BenchmarkResult.cs", "CategoryAttribute.cs", "IBenchmarkTarget.cs" };
+            // TODO - Maybe make this list automatic, i.e. search for all Embedded Resources in the "MiniBench.Core" namespace?
+            var embeddedCodeFiles = new[] 
+                {
+                    "BenchmarkAttribute.cs", "CategoryAttribute.cs", 
+                    "IBenchmarkTarget.cs", "BenchmarkResult.cs", 
+                    "Options.cs", "OptionsBuilder.cs", "Runner.cs",
+                };
             var embeddedCodeTrees = new List<SyntaxTree>();
             foreach (var codeFile in embeddedCodeFiles)
             {
@@ -111,6 +117,7 @@ namespace MiniBench
             // TODO Maybe re-write this using the Fluent-API, as shown here  http://roslyn.codeplex.com/discussions/541557
             var compilationOptions = new CSharpCompilationOptions(
                                             outputKind: OutputKind.ConsoleApplication,
+                                            mainTypeName: "MiniBench.Benchmarks.Program",
                                             optimizationLevel: OptimizationLevel.Release);
             var generatedCodeName = "Benchmark";
             var compilation = CSharpCompilation.Create(generatedCodeName, allSyntaxTrees, GetRequiredReferences(), compilationOptions);
@@ -124,7 +131,7 @@ namespace MiniBench
                 var emitToDiskResult = compilation.Emit(outputPath: generatedCodeName + ".exe",
                                                         pdbPath: generatedCodeName + ".pdb",
                                                         xmlDocumentationPath: generatedCodeName + ".xml");
-                Console.WriteLine("Emit to disk   Success: {0}", emitToDiskResult.Success);
+                Console.WriteLine("Emit to disk Success: {0}", emitToDiskResult.Success);
             }
         }
 
@@ -148,7 +155,12 @@ namespace MiniBench
                     //MetadataReference.CreateFromAssembly(Assembly.LoadFrom(@"C:\Windows\Microsoft.NET\Framework\v2.0.50727\mscorlib.dll")),
 
                     // In here we include any other parts of the .NET framework that we need
-                    MetadataReference.CreateFromAssembly(typeof(System.Diagnostics.Stopwatch).Assembly)
+                    MetadataReference.CreateFromAssembly(typeof(System.Diagnostics.Stopwatch).Assembly),
+
+                    // TODO in here, we need to detect that the SampleBenchmark is using Xunit and include it
+                    // Need a general way, for instance the benchmark can include any 3rd party references it wants! 
+                    // Is it a dirty hack to assume we're running in the \bin folder and so just include an .dll files we find?
+                    MetadataReference.CreateFromFile(@"C:\Users\warma11\Downloads\__GitHub__\MiniBench-WIP\MiniBench.Demo\..\packages\xunit.1.9.2\lib\net20\xunit.dll")
                 };
         }
 

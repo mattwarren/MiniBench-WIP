@@ -41,7 +41,10 @@
     <Compile Include="BenchmarkTarget.cs" />
     <Compile Include="CategoryAttribute.cs" />
     <Compile Include="IBenchmarkTarget.cs" />
+    <Compile Include="Options.cs" />
+    <Compile Include="OptionsBuilder.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Runner.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="readme.md" />
