@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 
 namespace MiniBench
@@ -21,6 +22,8 @@ namespace MiniBench
             new CSharpParseOptions(
                     kind: SourceCodeKind.Regular,
                     languageVersion: LanguageVersion.CSharp2);
+
+        private readonly Encoding defaultEncoding = Encoding.UTF8;
 
         internal CodeGenerator(MemoryStream peStream, MemoryStream pdbStream)
         {
@@ -42,8 +45,12 @@ namespace MiniBench
             var outputDirectory = Environment.CurrentDirectory;
             var allSyntaxTrees = new List<SyntaxTree>(GenerateEmbeddedCode());
             allSyntaxTrees.Add(benchmarkTree);
-            allSyntaxTrees.AddRange(GenerateRunners(allMethods, namespaceName, className, outputDirectory));
-            allSyntaxTrees.Add(GenerateLauncher(outputDirectory));
+
+            var generatedRunners = GenerateRunners(allMethods, namespaceName, className, outputDirectory);
+            allSyntaxTrees.AddRange(generatedRunners);
+
+            var generatedLauncher = GenerateLauncher(outputDirectory);
+            allSyntaxTrees.Add(generatedLauncher);
 
             CompileAndEmitCode(allSyntaxTrees, emitToDisk: true);
         }
@@ -75,16 +82,18 @@ namespace MiniBench
                                             namespaceName.Replace('.', '_'),
                                             className,
                                             methodName);
+                var fileName = string.Format(generatedClassName + ".cs");
+                var outputFileName = Path.Combine(outputDirectory, fileName);
+
                 var codeGenTimer = Stopwatch.StartNew();
                 var generatedBenchmark = BenchmarkTemplate.ProcessCodeTemplates(namespaceName, className, methodName, generatedClassName);
-                var generatedRunnerTree = CSharpSyntaxTree.ParseText(generatedBenchmark, options: parseOptions);
+                var generatedRunnerTree = CSharpSyntaxTree.ParseText(generatedBenchmark, options: parseOptions, path: outputFileName, encoding: defaultEncoding);
                 generatedRunners.Add(generatedRunnerTree);
                 codeGenTimer.Stop();
-                Console.WriteLine("Took {0} ({1,5:N0}ms) - generated CSharp Syntx Tree", codeGenTimer.Elapsed, codeGenTimer.ElapsedMilliseconds);
+                Console.WriteLine("Took {0} ({1,5:N0}ms) - to generate CSharp Syntx Tree", codeGenTimer.Elapsed, codeGenTimer.ElapsedMilliseconds);
 
-                var fileName = string.Format(generatedClassName + ".cs");
                 var fileWriteTimer = Stopwatch.StartNew();
-                File.WriteAllText(Path.Combine(outputDirectory, fileName), generatedRunnerTree.GetRoot().ToFullString());
+                File.WriteAllText(outputFileName, generatedRunnerTree.GetRoot().ToFullString(), encoding: defaultEncoding);
                 fileWriteTimer.Stop();
                 Console.WriteLine("Generated file: " + fileName);
                 Console.WriteLine("Took {0} ({1,5:N0}ms) - to write file to disk", fileWriteTimer.Elapsed, fileWriteTimer.ElapsedMilliseconds);
@@ -95,9 +104,10 @@ namespace MiniBench
         private SyntaxTree GenerateLauncher(string outputDirectory)
         {
             var generatedLauncher = BenchmarkTemplate.ProcessLauncherTemplate();
-            var generatedLauncherTree = CSharpSyntaxTree.ParseText(generatedLauncher, options: parseOptions);
             var fileName = "Generated_Launcher.cs";
-            File.WriteAllText(Path.Combine(outputDirectory, fileName), generatedLauncherTree.GetRoot().ToFullString());
+            var outputFileName = Path.Combine(outputDirectory, fileName);
+            var generatedLauncherTree = CSharpSyntaxTree.ParseText(generatedLauncher, options: parseOptions, path: outputFileName, encoding: defaultEncoding);
+            File.WriteAllText(outputFileName, generatedLauncherTree.GetRoot().ToFullString(), encoding: defaultEncoding);
             Console.WriteLine("Generated file: " + fileName);
 
             return generatedLauncherTree;
@@ -105,7 +115,7 @@ namespace MiniBench
 
         private List<SyntaxTree> GenerateEmbeddedCode()
         {
-            // TODO - Maybe make this list automatic, i.e. search for all Embedded Resources in the "MiniBench.Core" namespace?
+            // TODO Maybe make this list automatic, i.e. search for all Embedded Resources in the "MiniBench.Core" namespace?
             var embeddedCodeFiles = new[] 
                 {
                     "BenchmarkAttribute.cs", "CategoryAttribute.cs", 
@@ -130,26 +140,36 @@ namespace MiniBench
                                             outputKind: OutputKind.ConsoleApplication,
                                             mainTypeName: "MiniBench.Benchmarks.Program",
                                             optimizationLevel: OptimizationLevel.Release);
-            var generatedCodeName = "Benchmark";
-            var codeEmitTimer = Stopwatch.StartNew();
+            // TODO decide if this is a good idea or not?? We are re-writing over the top of the file that VS has just built!
+            // But it does mean that you can use the Test Runner in VS to run the Integration Tests :-)
+            var generatedCodeName = "MiniBench.Demo"; // "Benchmark";
+
+            // One call here will be sloooowww (probably Create() or Emit()), because it causes a load/JIT of certain parts of Roslyn
+            // see https://roslyn.codeplex.com/discussions/573503 for a full explanation (JITting of Roslyn dll's is the main cause)
+
+            var compilationTimer = Stopwatch.StartNew();
             var compilation = CSharpCompilation.Create(generatedCodeName, allSyntaxTrees, GetRequiredReferences(), compilationOptions);
-            var result = compilation.Emit(peStream: peStream, pdbStream: pdbStream, cancellationToken: CancellationToken.None);
-            codeEmitTimer.Stop();
-            Console.WriteLine("Emit in-memory Success: {0}\n  {1}", result.Success, string.Join("\n  ", result.Diagnostics));
-            Console.WriteLine("Took {0} ({1,5:N0}ms) - to emit all generated code IN-MEMORY", codeEmitTimer.Elapsed, codeEmitTimer.ElapsedMilliseconds);
+            compilationTimer.Stop();
+            Console.WriteLine("Took {0} ({1,5:N0}ms) - to create the CSharpCompilation", compilationTimer.Elapsed, compilationTimer.ElapsedMilliseconds);
+
+            //var codeEmitInMemoryTimer = Stopwatch.StartNew();
+            //var emitInMemoryResult = compilation.Emit(peStream: peStream, pdbStream: pdbStream, cancellationToken: CancellationToken.None);
+            //codeEmitInMemoryTimer.Stop();
+            //// Don't print diagnostics here, let it be done when we emit to disk, i.e. the real thing
+            ////Console.WriteLine("Emit in-memory Success: {0}\n  {1}", emitInMemoryResult.Success, string.Join("\n  ", emitInMemoryResult.Diagnostics));
+            //Console.WriteLine("Emit in-memory Success: {0}", emitInMemoryResult.Success);
+            //Console.WriteLine("Took {0} ({1,5:N0}ms) - to emit all generated code IN-MEMORY", codeEmitInMemoryTimer.Elapsed, codeEmitInMemoryTimer.ElapsedMilliseconds);
 
             if (emitToDisk)
             {
-                // Write them to disk for debugging
-                Console.WriteLine("Current directory: " + Environment.CurrentDirectory);
+                Console.WriteLine("\nCurrent directory: " + Environment.CurrentDirectory);
                 var codeEmitToDiskTimer = Stopwatch.StartNew();
                 var emitToDiskResult = compilation.Emit(outputPath: generatedCodeName + ".exe",
                                                         pdbPath: generatedCodeName + ".pdb",
                                                         xmlDocumentationPath: generatedCodeName + ".xml");
-                Console.WriteLine("Emit to disk Success: {0}", emitToDiskResult.Success);
                 codeEmitToDiskTimer.Stop();
-                Console.WriteLine("Emit in-memory Success: {0}\n  {1}", result.Success, string.Join("\n  ", result.Diagnostics));
-                Console.WriteLine("Took {0} ({1,5:N0}ms) - to emit generated code TO DISK", codeEmitToDiskTimer.Elapsed, codeEmitToDiskTimer.ElapsedMilliseconds);
+                Console.WriteLine("Emit to DISK Success: {0}\n  {1}", emitToDiskResult.Success, string.Join("\n  ", emitToDiskResult.Diagnostics));
+                Console.WriteLine("Took {0} ({1,5:N0}ms) - to emit generated code to DISK", codeEmitToDiskTimer.Elapsed, codeEmitToDiskTimer.ElapsedMilliseconds);
             }
         }
 
@@ -177,7 +197,7 @@ namespace MiniBench
 
                     // TODO in here, we need to detect that the SampleBenchmark is using Xunit and include it
                     // Need a general way, for instance the benchmark can include any 3rd party references it wants! 
-                    // Is it a dirty hack to assume we're running in the \bin folder and so just include an .dll files we find?
+                    // Maybe supply the .csproj file on the command-line and read the dependencies from that?!?!
                     MetadataReference.CreateFromFile(@"C:\Users\warma11\Downloads\__GitHub__\MiniBench-WIP\MiniBench.Demo\..\packages\xunit.1.9.2\lib\net20\xunit.dll")
                 };
         }

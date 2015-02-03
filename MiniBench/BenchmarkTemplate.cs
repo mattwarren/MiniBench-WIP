@@ -119,8 +119,8 @@ namespace MiniBench.Benchmarks
                     Console.WriteLine(""Unable to create type: "" + type.Name);
                     continue;
                 }
-                BenchmarkResult result = obj.RunTest(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10));
-                Console.WriteLine(result + ""\n"");
+                BenchmarkResult emitInMemoryResult = obj.RunTest(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10));
+                Console.WriteLine(emitInMemoryResult + ""\n"");
             }
         }
     }
