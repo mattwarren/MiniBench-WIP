@@ -9,30 +9,31 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-using System.Threading;
 
 namespace MiniBench
 {
     internal class CodeGenerator
     {
-        private readonly MemoryStream peStream;
-        private readonly MemoryStream pdbStream;
+        private readonly string rootFolder;
+        private readonly IList<Tuple<string, string>> references;
+        private readonly IList<string> sourceFiles;
 
         private readonly CSharpParseOptions parseOptions = 
-            new CSharpParseOptions(
-                    kind: SourceCodeKind.Regular,
-                    languageVersion: LanguageVersion.CSharp2);
+            new CSharpParseOptions(kind: SourceCodeKind.Regular, languageVersion: LanguageVersion.CSharp2);
 
         private readonly Encoding defaultEncoding = Encoding.UTF8;
 
-        internal CodeGenerator(MemoryStream peStream, MemoryStream pdbStream)
+        internal CodeGenerator(string rootFolder, IList<string> sourceFiles, IList<Tuple<string, string>> references)
         {
-            this.peStream = peStream;
-            this.pdbStream = pdbStream;
+            this.rootFolder = rootFolder;
+            this.sourceFiles = sourceFiles;
+            this.references = references;
         }
 
-        internal void GenerateCode(string code)
+        internal void GenerateCode()
         {
+            // TODO change this!!!!
+            var code = File.ReadAllText(Path.Combine(rootFolder, sourceFiles[0]));
             var benchmarkTree = CSharpSyntaxTree.ParseText(code, options: parseOptions);
 
             // TODO error cheecking, in case the file doesn't have a Namespace, Class or any valid Methods!
@@ -49,7 +50,7 @@ namespace MiniBench
             var generatedRunners = GenerateRunners(allMethods, namespaceName, className, outputDirectory);
             allSyntaxTrees.AddRange(generatedRunners);
 
-            var generatedLauncher = GenerateLauncher(outputDirectory);
+            var generatedLauncher = GenerateLauncher(namespaceName, className, outputDirectory);
             allSyntaxTrees.Add(generatedLauncher);
 
             CompileAndEmitCode(allSyntaxTrees, emitToDisk: true);
@@ -90,7 +91,7 @@ namespace MiniBench
                 var generatedRunnerTree = CSharpSyntaxTree.ParseText(generatedBenchmark, options: parseOptions, path: outputFileName, encoding: defaultEncoding);
                 generatedRunners.Add(generatedRunnerTree);
                 codeGenTimer.Stop();
-                Console.WriteLine("Took {0} ({1,5:N0}ms) - to generate CSharp Syntx Tree", codeGenTimer.Elapsed, codeGenTimer.ElapsedMilliseconds);
+                Console.WriteLine("Took {0} ({1,5:N0}ms) - to generate CSharp Syntax Tree", codeGenTimer.Elapsed, codeGenTimer.ElapsedMilliseconds);
 
                 var fileWriteTimer = Stopwatch.StartNew();
                 File.WriteAllText(outputFileName, generatedRunnerTree.GetRoot().ToFullString(), encoding: defaultEncoding);
@@ -101,9 +102,9 @@ namespace MiniBench
             return generatedRunners;
         }
 
-        private SyntaxTree GenerateLauncher(string outputDirectory)
+        private SyntaxTree GenerateLauncher(string namespaceName, string className, string outputDirectory)
         {
-            var generatedLauncher = BenchmarkTemplate.ProcessLauncherTemplate();
+            var generatedLauncher = BenchmarkTemplate.ProcessLauncherTemplate(namespaceName, className);
             var fileName = "Generated_Launcher.cs";
             var outputFileName = Path.Combine(outputDirectory, fileName);
             var generatedLauncherTree = CSharpSyntaxTree.ParseText(generatedLauncher, options: parseOptions, path: outputFileName, encoding: defaultEncoding);
@@ -135,7 +136,7 @@ namespace MiniBench
 
         private void CompileAndEmitCode(List<SyntaxTree> allSyntaxTrees, bool emitToDisk)
         {
-            // TODO Maybe re-write this using the Fluent-API, as shown here  http://roslyn.codeplex.com/discussions/541557
+            // TODO Maybe re-write this using the Fluent-API, as shown here http://roslyn.codeplex.com/discussions/541557
             var compilationOptions = new CSharpCompilationOptions(
                                             outputKind: OutputKind.ConsoleApplication,
                                             mainTypeName: "MiniBench.Benchmarks.Program",
@@ -152,14 +153,6 @@ namespace MiniBench
             compilationTimer.Stop();
             Console.WriteLine("Took {0} ({1,5:N0}ms) - to create the CSharpCompilation", compilationTimer.Elapsed, compilationTimer.ElapsedMilliseconds);
 
-            //var codeEmitInMemoryTimer = Stopwatch.StartNew();
-            //var emitInMemoryResult = compilation.Emit(peStream: peStream, pdbStream: pdbStream, cancellationToken: CancellationToken.None);
-            //codeEmitInMemoryTimer.Stop();
-            //// Don't print diagnostics here, let it be done when we emit to disk, i.e. the real thing
-            ////Console.WriteLine("Emit in-memory Success: {0}\n  {1}", emitInMemoryResult.Success, string.Join("\n  ", emitInMemoryResult.Diagnostics));
-            //Console.WriteLine("Emit in-memory Success: {0}", emitInMemoryResult.Success);
-            //Console.WriteLine("Took {0} ({1,5:N0}ms) - to emit all generated code IN-MEMORY", codeEmitInMemoryTimer.Elapsed, codeEmitInMemoryTimer.ElapsedMilliseconds);
-
             if (emitToDisk)
             {
                 Console.WriteLine("\nCurrent directory: " + Environment.CurrentDirectory);
@@ -173,9 +166,9 @@ namespace MiniBench
             }
         }
 
-        private static IList<MetadataReference> GetRequiredReferences()
+        private IList<MetadataReference> GetRequiredReferences()
         {
-            return new List<MetadataReference>
+            var standardReferences = new List<MetadataReference>
                 { 
                     // TODO need to get a reference to mscorlib v 2.0 here, 
                     // can't use "typeof(String).Assembly" as that's v 4.0 (because MiniBench itself is 4.0)
@@ -194,12 +187,15 @@ namespace MiniBench
 
                     // In here we include any other parts of the .NET framework that we need
                     MetadataReference.CreateFromAssembly(typeof(System.Diagnostics.Stopwatch).Assembly),
-
-                    // TODO in here, we need to detect that the SampleBenchmark is using Xunit and include it
-                    // Need a general way, for instance the benchmark can include any 3rd party references it wants! 
-                    // Maybe supply the .csproj file on the command-line and read the dependencies from that?!?!
-                    MetadataReference.CreateFromFile(@"C:\Users\warma11\Downloads\__GitHub__\MiniBench-WIP\MiniBench.Demo\..\packages\xunit.1.9.2\lib\net20\xunit.dll")
                 };
+
+            // Now add the references we need from the .csproj file
+            foreach (var reference in references)
+            {
+                standardReferences.Add(MetadataReference.CreateFromFile(Path.Combine(rootFolder, reference.Item2)));
+            }
+
+            return standardReferences;
         }
 
         private static string GetEmbeddedResource(string resourceFullPath)

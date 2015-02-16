@@ -18,4 +18,4 @@ It (MiniBench.Core) must not:
 ----
 MiniBench		- .NET 4.5.1
 MiniBench.Core	- .NET 2.0
-MiniBench.Demo	- .NET 4.0
+MiniBench.Demo	- .NET 4.0 (Client Profile)

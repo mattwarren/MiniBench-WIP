@@ -36,7 +36,6 @@ namespace MiniBench.Demo
             DemoTestRunCount++;
         }
 
-
         //[Benchmark]
         [Category("Testing")]
         public void DateTimeNow()

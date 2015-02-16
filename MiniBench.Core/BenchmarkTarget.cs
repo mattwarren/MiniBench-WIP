@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Reflection;
-using System.Runtime.Remoting;
 
 namespace MiniBench.Core
 {
@@ -70,7 +69,8 @@ namespace MiniBench.Core
                     warmupIterations++;
                 }
                 stopwatch.Stop();
-                Console.WriteLine("Warmup {0:N0} iterations in {1}ms", warmupIterations, (long) stopwatch.ElapsedMilliseconds);
+                Console.WriteLine("Warmup {0:N0} iterations in {1:N2}ms", warmupIterations, (long)stopwatch.ElapsedMilliseconds);
+
                 double ratio = targetTime.TotalSeconds / stopwatch.Elapsed.TotalSeconds;
                 long iterations = (long) (warmupIterations * ratio);
                 GC.Collect();
@@ -82,6 +82,8 @@ namespace MiniBench.Core
                     action();
                 }
                 stopwatch.Stop();
+                Console.WriteLine("Benchmark {0:N0} iterations in {1:n2}ms", iterations, (long)stopwatch.ElapsedMilliseconds);
+
                 return BenchmarkResult.ForSuccess(this, iterations, stopwatch.Elapsed);
             }
             catch (Exception e)
