@@ -34,8 +34,6 @@
     <Reference Include="System" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AssemblyLoader.cs" />
-    <Compile Include="BenchmarkProbe.cs" />
     <Compile Include="BenchmarkAttribute.cs" />
     <Compile Include="BenchmarkResult.cs" />
     <Compile Include="BenchmarkTarget.cs" />

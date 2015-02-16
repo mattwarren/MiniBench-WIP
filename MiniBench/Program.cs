@@ -1,8 +1,6 @@
-﻿using MiniBench.Core;
-using System;
+﻿using System;
 using System.IO;
-using System.Reflection;
-using System.Security.Policy;
+
 
 namespace MiniBench
 {
@@ -11,45 +9,32 @@ namespace MiniBench
     /// </summary>
     class Program
     {
-        static void Main(string[] args)
+        static int Main(string[] args)
         {
-            string fileToBenchmark = args[0];
-            string extension = Path.GetExtension(fileToBenchmark);
-
-            AppDomain domain = AppDomain.CreateDomain("MiniBench runner", new Evidence(), Environment.CurrentDirectory, Environment.CurrentDirectory, shadowCopyFiles: false);
-            var loader = CreateInstance<AssemblyLoader>(domain);
-
-            Assembly loadedAssembly = null;
-            if (extension == ".dll")
+            var expectedExtension = ".csproj";
+            if (args.Length == 0)
             {
-                AssemblyName assembly = AssemblyName.GetAssemblyName(fileToBenchmark);
-                Console.WriteLine("Loading Benchmark Assembly from disk: {0}\n", assembly.FullName);
-                loadedAssembly = loader.Load(assembly.FullName);
-
-                var probe = CreateInstance<BenchmarkProbe>(domain);
-                IBenchmarkTarget[] targets = probe.Probe(loadedAssembly);
-
-                foreach (var target in targets)
-                {
-                    var result = target.RunTest(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10));
-                    Console.WriteLine(result);
-                }
+                Console.WriteLine("No Command line arguments were provided, you must specify a {0} file", expectedExtension);
+                return -1;
             }
-            else if (extension == ".cs")
+
+            string projectFileName = args[0];
+            string extension = Path.GetExtension(projectFileName);
+            if (extension != expectedExtension)
             {
-                var peStream = new MemoryStream();
-                var pdbStream = new MemoryStream();
-                Console.WriteLine("Compiling Benchmark code into an self-contained Benchmark.exe: {0}\n", fileToBenchmark);
-                var generator = new CodeGenerator(peStream, pdbStream);
-                generator.GenerateCode(File.ReadAllText(fileToBenchmark));
-                //loadedAssembly = loader.Load(rawAssembly: peStream.GetBuffer(), rawSymbolStore: pdbStream.GetBuffer());
+                Console.WriteLine("You must specify a {0} file: {1}", expectedExtension, projectFileName);
+                return -1;
             }
-        }
 
-        private static T CreateInstance<T>(AppDomain domain)
-        {
-            Type type = typeof(T);
-            return (T)domain.CreateInstanceAndUnwrap(type.Assembly.FullName, type.FullName);
+            var projectParser = new ProjectFileParser();
+            var sourceFiles = projectParser.GetSourceFiles(projectFileName);
+            var references = projectParser.GetReferences(projectFileName);
+
+            Console.WriteLine("Compiling Benchmark code into an self-contained Benchmark.exe: {0}\n", projectFileName);
+            var generator = new CodeGenerator(Path.GetDirectoryName(projectFileName), sourceFiles, references);
+            generator.GenerateCode();
+
+            return 0;
         }
     }
 }
