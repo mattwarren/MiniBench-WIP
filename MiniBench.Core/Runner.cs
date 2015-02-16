@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Reflection;
+using System.Security.Policy;
 
 namespace MiniBench.Core
 {
@@ -22,12 +23,13 @@ namespace MiniBench.Core
             foreach (Type type in assembly.GetTypes())
             {
                 if (!type.IsClass || !type.IsPublic || type.IsAbstract ||
-                    typeof(IBenchmarkTarget).IsAssignableFrom(type) == false)
+                    typeof(IBenchmarkTarget).IsAssignableFrom(type) == false || 
+                    type.Name.StartsWith(options.BenchmarkPrefix) == false)
                 {
                     continue;
                 }
 
-                //"Generated_Runner_MiniBench_Demo_SampleBenchmark_DemoTest" comes from DemoTest() in MiniBench.Demo.SampleBenchmark.cs
+                //For example: "Generated_Runner_MiniBench_Demo_SampleBenchmark_DemoTest" comes from DemoTest() in MiniBench.Demo.SampleBenchmark.cs
                 Console.WriteLine("Expected:  " + options.BenchmarkPrefix);
                 Console.WriteLine("Found:     " + type.Name);
                 //Console.WriteLine("FullName:  " + type.FullName);
@@ -39,12 +41,17 @@ namespace MiniBench.Core
                     continue;
                 }
 
-                if (type.Name.StartsWith(options.BenchmarkPrefix))
-                {
-                    BenchmarkResult result = obj.RunTest(TimeSpan.FromMilliseconds(5), TimeSpan.FromMilliseconds(5));
-                    Console.WriteLine(result + "\n");
-                }
+                AppDomain domain = AppDomain.CreateDomain("MiniBench runner", new Evidence(), Environment.CurrentDirectory, Environment.CurrentDirectory, false);
+                //BenchmarkResult loader = CreateInstance<IBenchmarkTarget>(domain);
+                BenchmarkResult result = obj.RunTest(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(0100));
+                Console.WriteLine(result + "\n");
             }
+        }
+
+        private static T CreateInstance<T>(AppDomain domain)
+        {
+            Type type = typeof(T);
+            return (T)domain.CreateInstanceAndUnwrap(type.Assembly.FullName, type.FullName);
         }
     }
 }

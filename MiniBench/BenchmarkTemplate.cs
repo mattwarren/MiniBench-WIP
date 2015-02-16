@@ -55,7 +55,7 @@ namespace MiniBench.Benchmarks
                     warmupIterations++;
                 }
                 stopwatch.Stop();
-                Console.WriteLine(""Warmup {0:N0} iterations in {1}ms"", warmupIterations, (long)stopwatch.ElapsedMilliseconds);
+                Console.WriteLine(""Warmup:    {0,12:N0} iterations in {1,10:N2}ms"", warmupIterations, (long)stopwatch.ElapsedMilliseconds);
 
                 double ratio = targetTime.TotalSeconds / stopwatch.Elapsed.TotalSeconds;
                 long iterations = (long)(warmupIterations * ratio);
@@ -70,8 +70,8 @@ namespace MiniBench.Benchmarks
                     benchmarkClass.##METHOD-NAME##(##METHOD-PARAMETERS##);
                 }
                 stopwatch.Stop();
+                Console.WriteLine(""Benchmark: {0,12:N0} iterations in {1,10:N2}ms"", iterations, (long)stopwatch.ElapsedMilliseconds);
 
-                Console.WriteLine(""Benchmark COMPLETE"");
                 return BenchmarkResult.ForSuccess(this, iterations, stopwatch.Elapsed);
             }
             catch (Exception e)
@@ -95,6 +95,7 @@ namespace MiniBench.Benchmarks
 @"using System;
 using MiniBench.Core;
 using System.Reflection;
+using ##NAMESPACE-NAME##;
 
 namespace MiniBench.Benchmarks
 {
@@ -102,26 +103,11 @@ namespace MiniBench.Benchmarks
     {
         static void Main(string[] args)
         {
-            // TODO spin-up a new App-Domain and execute the benchmark in that
-            Assembly assembly = Assembly.GetExecutingAssembly();
-            foreach (Type type in assembly.GetTypes())
-            {
-                if (!type.IsClass || !type.IsPublic || type.IsAbstract ||
-                    typeof(IBenchmarkTarget).IsAssignableFrom(type) == false)
-                {
-                    continue;
-                }
-
-                Console.WriteLine(""Found: "" + type.Name);
-                IBenchmarkTarget obj = assembly.CreateInstance(type.FullName) as IBenchmarkTarget;
-                if (obj == null)
-                {
-                    Console.WriteLine(""Unable to create type: "" + type.Name);
-                    continue;
-                }
-                BenchmarkResult emitInMemoryResult = obj.RunTest(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10));
-                Console.WriteLine(emitInMemoryResult + ""\n"");
-            }
+            // TODO put in here any attributes that control the benchmark parameters
+            Options opt = new OptionsBuilder()
+                    .Include(typeof(##CLASS-NAME##))
+                    .Build();
+            new Runner(opt).Run();
         }
     }
 }";
@@ -129,18 +115,21 @@ namespace MiniBench.Benchmarks
         internal static string ProcessCodeTemplates(string namespaceName, string className, string methodName, string generatedClassName)
         {
             // TODO at some point, we might need a less-hacky templating mechanism?!
-            var generatedBenchmark = BenchmarkTemplate.benchmarkHarnessTemplate
-                                .Replace(BenchmarkTemplate.namespaceReplaceText, namespaceName)
-                                .Replace(BenchmarkTemplate.classReplaceText, className)
-                                .Replace(BenchmarkTemplate.methodReplaceText, methodName)
-                                .Replace(BenchmarkTemplate.methodParametersReplaceText, "")
-                                .Replace(BenchmarkTemplate.generatedClassReplaceText, generatedClassName);
+            var generatedBenchmark = benchmarkHarnessTemplate
+                                .Replace(namespaceReplaceText, namespaceName)
+                                .Replace(classReplaceText, className)
+                                .Replace(methodReplaceText, methodName)
+                                .Replace(methodParametersReplaceText, "")
+                                .Replace(generatedClassReplaceText, generatedClassName);
             return generatedBenchmark;
         }
 
-        internal static string ProcessLauncherTemplate()
+        internal static string ProcessLauncherTemplate(string namespaceName, string className)
         {
-            return benchmarkLauncherTemplate;
+            var benchmarkLauncher = benchmarkLauncherTemplate
+                                .Replace(namespaceReplaceText, namespaceName)
+                                .Replace(classReplaceText, className);
+            return benchmarkLauncher;
         }
     }
 }
