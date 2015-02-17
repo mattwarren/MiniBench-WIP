@@ -94,8 +94,7 @@ namespace MiniBench.Benchmarks
         private static string benchmarkLauncherTemplate =
 @"using System;
 using MiniBench.Core;
-using System.Reflection;
-using ##NAMESPACE-NAME##;
+//using ##NAMESPACE-NAME##;
 
 namespace MiniBench.Benchmarks
 {
@@ -105,7 +104,8 @@ namespace MiniBench.Benchmarks
         {
             // TODO put in here any attributes that control the benchmark parameters
             Options opt = new OptionsBuilder()
-                    .Include(typeof(##CLASS-NAME##))
+                    //.Include(typeof(##CLASS-NAME##))
+                    .Include(typeof(##NAMESPACE-NAME##.##CLASS-NAME##))
                     .Build();
             new Runner(opt).Run();
         }

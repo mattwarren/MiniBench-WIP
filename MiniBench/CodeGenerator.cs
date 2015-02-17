@@ -32,25 +32,31 @@ namespace MiniBench
 
         internal void GenerateCode()
         {
-            // TODO change this!!!!
-            var code = File.ReadAllText(Path.Combine(rootFolder, sourceFiles[0]));
-            var benchmarkTree = CSharpSyntaxTree.ParseText(code, options: parseOptions);
-
-            // TODO error cheecking, in case the file doesn't have a Namespace, Class or any valid Methods!
-            var @namespace = NodesOfType<NamespaceDeclarationSyntax>(benchmarkTree).FirstOrDefault();
-            var namespaceName = @namespace.Name.ToString();
-            var @class = NodesOfType<ClassDeclarationSyntax>(benchmarkTree).FirstOrDefault();
-            var className = @class.Identifier.ToString();
-            var allMethods = NodesOfType<MethodDeclarationSyntax>(benchmarkTree);
-
             var outputDirectory = Environment.CurrentDirectory;
             var allSyntaxTrees = new List<SyntaxTree>(GenerateEmbeddedCode());
-            allSyntaxTrees.Add(benchmarkTree);
+            foreach (var file in sourceFiles.Where(f => f.StartsWith("Properties\\") == false))
+            {
+                var code = File.ReadAllText(Path.Combine(rootFolder, file));
+                var benchmarkTree = CSharpSyntaxTree.ParseText(code, options: parseOptions);
 
-            var generatedRunners = GenerateRunners(allMethods, namespaceName, className, outputDirectory);
-            allSyntaxTrees.AddRange(generatedRunners);
+                // TODO error cheecking, in case the file doesn't have a Namespace, Class or any valid Methods!
+                var @namespace = NodesOfType<NamespaceDeclarationSyntax>(benchmarkTree).FirstOrDefault();
+                var namespaceName = @namespace.Name.ToString();
+                var @class = NodesOfType<ClassDeclarationSyntax>(benchmarkTree).FirstOrDefault();
+                var className = @class.Identifier.ToString();
+                var allMethods = NodesOfType<MethodDeclarationSyntax>(benchmarkTree);
 
-            var generatedLauncher = GenerateLauncher(namespaceName, className, outputDirectory);
+                allSyntaxTrees.Add(benchmarkTree);
+
+                var generatedRunners = GenerateRunners(allMethods, namespaceName, className, outputDirectory);
+                allSyntaxTrees.AddRange(generatedRunners);
+
+                // TODO we should do this here instaead, so there is a launcher per benchmark
+                //var generatedLauncher = GenerateLauncher(namespaceName, className, outputDirectory);
+                //allSyntaxTrees.Add(generatedLauncher);
+            }
+
+            var generatedLauncher = GenerateLauncher("MiniBench.Demo", "SampleConstantFolding", outputDirectory);
             allSyntaxTrees.Add(generatedLauncher);
 
             CompileAndEmitCode(allSyntaxTrees, emitToDisk: true);
