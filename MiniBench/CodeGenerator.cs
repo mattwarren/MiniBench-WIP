@@ -23,6 +23,8 @@ namespace MiniBench
 
         private readonly Encoding defaultEncoding = Encoding.UTF8;
 
+        private readonly String filePrefix = "Generated_Runner";
+
         internal CodeGenerator(string rootFolder, IList<string> sourceFiles, IList<Tuple<string, string>> references)
         {
             this.rootFolder = rootFolder;
@@ -33,6 +35,14 @@ namespace MiniBench
         internal void GenerateCode()
         {
             var outputDirectory = Environment.CurrentDirectory;
+            var fileDeletionTimer = Stopwatch.StartNew();
+            foreach (var existingGeneratedFile in Directory.EnumerateFiles(outputDirectory, filePrefix + "*"))
+            {
+                File.Delete(existingGeneratedFile);
+            }
+            fileDeletionTimer.Stop();
+            Console.WriteLine("Took {0} ({1,5:N0}ms) - to delete existing files from disk\n", fileDeletionTimer.Elapsed, fileDeletionTimer.ElapsedMilliseconds);
+
             var allSyntaxTrees = new List<SyntaxTree>(GenerateEmbeddedCode());
             foreach (var file in sourceFiles.Where(f => f.StartsWith("Properties\\") == false))
             {
@@ -51,12 +61,13 @@ namespace MiniBench
                 var generatedRunners = GenerateRunners(allMethods, namespaceName, className, outputDirectory);
                 allSyntaxTrees.AddRange(generatedRunners);
 
-                // TODO we should do this here instaead, so there is a launcher per benchmark
+                // TODO we should do this here instead, so there is a launcher per benchmark
                 //var generatedLauncher = GenerateLauncher(namespaceName, className, outputDirectory);
                 //allSyntaxTrees.Add(generatedLauncher);
             }
 
-            var generatedLauncher = GenerateLauncher("MiniBench.Demo", "SampleConstantFolding", outputDirectory);
+            var generatedLauncher = GenerateLauncher("MiniBench.Demo", "SampleDeadCodeElimination", outputDirectory);
+            //var generatedLauncher = GenerateLauncher("MiniBench.Demo", "SampleConstantFolding", outputDirectory);
             allSyntaxTrees.Add(generatedLauncher);
 
             CompileAndEmitCode(allSyntaxTrees, emitToDisk: true);
@@ -64,15 +75,6 @@ namespace MiniBench
 
         private List<SyntaxTree> GenerateRunners(IList<MethodDeclarationSyntax> methods, string namespaceName, string className, string outputDirectory)
         {
-            var filePrefix = "Generated_Runner";
-            var fileDeletionTimer = Stopwatch.StartNew();
-            foreach (var existingGeneratedFile in Directory.EnumerateFiles(outputDirectory, filePrefix + "*"))
-            {
-                File.Delete(existingGeneratedFile);
-            }
-            fileDeletionTimer.Stop();
-            Console.WriteLine("Took {0} ({1,5:N0}ms) - to delete existing files from disk", fileDeletionTimer.Elapsed, fileDeletionTimer.ElapsedMilliseconds);
-
             var modifiers = methods.Select(m => m.Modifiers).ToList();
             var benchmarkAttribute = typeof(BenchmarkAttribute).Name.Replace("Attribute", "");
             var validMethods = methods.Where(m => m.Modifiers.Any(mod => mod.CSharpKind() == SyntaxKind.PublicKeyword))
@@ -93,7 +95,11 @@ namespace MiniBench
                 var outputFileName = Path.Combine(outputDirectory, fileName);
 
                 var codeGenTimer = Stopwatch.StartNew();
-                var generatedBenchmark = BenchmarkTemplate.ProcessCodeTemplates(namespaceName, className, methodName, generatedClassName);
+                var returnType = method.ReturnType as PredefinedTypeSyntax;
+                var generateBlackhole = returnType.Keyword.CSharpKind() != SyntaxKind.VoidKeyword;
+                Console.WriteLine("*** method.ReturnType = {0}, (returnType.Keyword.CSharpKind() == SyntaxKind.VoidKeyword) = {1}, generateBlackHole = {2}",
+                                    returnType, returnType.Keyword.CSharpKind() == SyntaxKind.VoidKeyword, generateBlackhole);
+                var generatedBenchmark = BenchmarkTemplate.ProcessCodeTemplates(namespaceName, className, methodName, generatedClassName, generateBlackhole);
                 var generatedRunnerTree = CSharpSyntaxTree.ParseText(generatedBenchmark, options: parseOptions, path: outputFileName, encoding: defaultEncoding);
                 generatedRunners.Add(generatedRunnerTree);
                 codeGenTimer.Stop();
@@ -102,8 +108,9 @@ namespace MiniBench
                 var fileWriteTimer = Stopwatch.StartNew();
                 File.WriteAllText(outputFileName, generatedRunnerTree.GetRoot().ToFullString(), encoding: defaultEncoding);
                 fileWriteTimer.Stop();
-                Console.WriteLine("Generated file: " + fileName);
+
                 Console.WriteLine("Took {0} ({1,5:N0}ms) - to write file to disk", fileWriteTimer.Elapsed, fileWriteTimer.ElapsedMilliseconds);
+                Console.WriteLine("Generated file: {0}\n", fileName);
             }
             return generatedRunners;
         }
@@ -122,19 +129,20 @@ namespace MiniBench
 
         private List<SyntaxTree> GenerateEmbeddedCode()
         {
-            // TODO Maybe make this list automatic, i.e. search for all Embedded Resources in the "MiniBench.Core" namespace?
-            var embeddedCodeFiles = new[] 
-                {
-                    "BenchmarkAttribute.cs", "CategoryAttribute.cs", 
-                    "IBenchmarkTarget.cs", "BenchmarkResult.cs", 
-                    "Options.cs", "OptionsBuilder.cs", "Runner.cs",
-                };
             var embeddedCodeTrees = new List<SyntaxTree>();
-            foreach (var codeFile in embeddedCodeFiles)
+            var assembly = Assembly.GetExecutingAssembly();
+            foreach (var codeFile in assembly.GetManifestResourceNames())
             {
-                var codeText = GetEmbeddedResource("MiniBench.Core." + codeFile);
-                var codeTree = CSharpSyntaxTree.ParseText(codeText, options: parseOptions);
-                embeddedCodeTrees.Add(codeTree);
+                if (codeFile.StartsWith("MiniBench.Core.") == false)
+                    continue;
+
+                using (Stream stream = assembly.GetManifestResourceStream(codeFile))
+                using (StreamReader reader = new StreamReader(stream))
+                {
+                    string result = reader.ReadToEnd();
+                    var codeTree = CSharpSyntaxTree.ParseText(result, options: parseOptions);
+                    embeddedCodeTrees.Add(codeTree);
+                }
             }
 
             return embeddedCodeTrees;

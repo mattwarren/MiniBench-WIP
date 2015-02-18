@@ -82,6 +82,12 @@
     <EmbeddedResource Include="..\MiniBench.Core\Runner.cs">
       <Link>Core\Runner.cs</Link>
     </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\Blackhole.cs">
+      <Link>Core\Blackhole.cs</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\Utils.cs">
+      <Link>Core\Utils.cs</Link>
+    </EmbeddedResource>
     <Compile Include="BenchmarkTemplate.cs" />
     <Compile Include="CodeGenerator.cs" />
     <Compile Include="Program.cs" />
