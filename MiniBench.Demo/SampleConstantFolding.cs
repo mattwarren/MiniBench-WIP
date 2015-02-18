@@ -3,7 +3,7 @@ using System;
 
 namespace MiniBench.Demo
 {
-    // Fromhttp://hg.openjdk.java.net/code-tools/jmh/file/e0f24b563ae3/jmh-samples/src/main/java/org/openjdk/jmh/samples/JMHSample_10_ConstantFold.java
+    // From http://hg.openjdk.java.net/code-tools/jmh/file/e0f24b563ae3/jmh-samples/src/main/java/org/openjdk/jmh/samples/JMHSample_10_ConstantFold.java
     public class SampleConstantFolding
     {
         // IDEs will say "Oh, you can convert this field to local variable". Don't. Trust. Them.
@@ -11,10 +11,11 @@ namespace MiniBench.Demo
 
         // IDEs will probably also say "Look, it could be final". Don't. Trust. Them. Either.
         // TODO is const in c# the same as final ins Java?
+        //private final double wrongX = Math.PI;
         private const double wrongX = Math.PI;
 
         [Benchmark]
-        public double baseline() 
+        public double baseline()
         {
             // simply return the value, this is a baseline
             return Math.PI;
