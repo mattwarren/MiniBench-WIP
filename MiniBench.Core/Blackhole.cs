@@ -20,12 +20,9 @@ namespace MiniBench.Core
         {
             Random r = new Random((int)Stopwatch.GetTimestamp());
 
-            //d1 = r.NextDouble(); d2 = d1 + Math.ulp(d1);
-            d1 = r.NextDouble(); d2 = d1 + Ulp(d1);
+            d1 = r.NextDouble(); 
+            d2 = d1 + Ulp(d1);
 
-            //Console.WriteLine("Blackhole d1 = {0}, d2 = {1}, (d1 == d2) is {2}, d1 - d2 = {3}", d1, d2, d1 == d2, d1 - d2);
-            //Console.WriteLine("Blackhole d1 = {0}", BitConverter.DoubleToInt64Bits(d1));
-            //Console.WriteLine("Blackhole d2 = {0}\n", BitConverter.DoubleToInt64Bits(d2));
             if (d1 == d2)
             {
                 //throw new IllegalStateException("double tombstones are equal");
@@ -34,13 +31,15 @@ namespace MiniBench.Core
         }
 
         // TODO work out how much of this we really need to defeat the .NET JITter (as opposed to HotSpot)
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        //[MethodImpl(MethodImplOptions.NoInlining)]
         public void Consume(double d)
         {
             //double d1 = this.d1; // volatile read
             double d1 = Thread.VolatileRead(ref this.d1);
-            double d2 = this.d2;
-            if (d == d1 & d == d2)
+
+            // this uses '&' so that both operands are executed
+            // if it used '&&' instead that the RHS one could be short-circuited 
+            if (d == d1 & d == d2) 
             {
                 // SHOULD NEVER HAPPEN
                 nullBait.d1 = d; // implicit null pointer exception

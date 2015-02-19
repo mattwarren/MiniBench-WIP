@@ -8,14 +8,14 @@ namespace MiniBench.Demo
     {
         private double x = Math.PI;
 
-        //[Benchmark]
+        [Benchmark]
         public void baseline()
         {
             // do nothing, this is a baseline
             return;
         }
 
-        //[Benchmark]
+        [Benchmark]
         public void measureWrong()
         {
             // This is wrong: result is not used, and the entire computation is optimized out.
