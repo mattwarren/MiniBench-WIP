@@ -14,22 +14,20 @@ namespace MiniBench
 {
     internal class CodeGenerator
     {
-        private readonly string rootFolder;
-        private readonly IList<Tuple<string, string>> references;
-        private readonly IList<string> sourceFiles;
+        private readonly ProjectSettings projectSettings;
 
+        // TODO The version CSharp2/CSharp4 should be auto-detected from the .csproj file used in the Benchmark itself!
         private readonly CSharpParseOptions parseOptions = 
-            new CSharpParseOptions(kind: SourceCodeKind.Regular, languageVersion: LanguageVersion.CSharp2);
+            //new CSharpParseOptions(kind: SourceCodeKind.Regular, languageVersion: LanguageVersion.CSharp2);
+            new CSharpParseOptions(kind: SourceCodeKind.Regular, languageVersion: LanguageVersion.CSharp4);
 
         private readonly Encoding defaultEncoding = Encoding.UTF8;
 
         private readonly String filePrefix = "Generated_Runner";
 
-        internal CodeGenerator(string rootFolder, IList<string> sourceFiles, IList<Tuple<string, string>> references)
+        internal CodeGenerator(ProjectSettings projectSettings)
         {
-            this.rootFolder = rootFolder;
-            this.sourceFiles = sourceFiles;
-            this.references = references;
+            this.projectSettings = projectSettings;
         }
 
         internal void GenerateCode()
@@ -41,17 +39,18 @@ namespace MiniBench
                 File.Delete(existingGeneratedFile);
             }
             fileDeletionTimer.Stop();
-            Console.WriteLine("Took {0} ({1,5:N0}ms) - to delete existing files from disk\n", fileDeletionTimer.Elapsed, fileDeletionTimer.ElapsedMilliseconds);
+            Console.WriteLine("Took {0} ({1,7:N2}ms) - to delete existing files from disk\n", fileDeletionTimer.Elapsed, fileDeletionTimer.ElapsedMilliseconds);
 
             var allSyntaxTrees = new List<SyntaxTree>(GenerateEmbeddedCode());
-            foreach (var file in sourceFiles.Where(f => f.StartsWith("Properties\\") == false))
+            foreach (var file in projectSettings.SourceFiles.Where(f => f.StartsWith("Properties\\") == false))
             {
-                var code = File.ReadAllText(Path.Combine(rootFolder, file));
+                var code = File.ReadAllText(Path.Combine(projectSettings.RootFolder, file));
                 var benchmarkTree = CSharpSyntaxTree.ParseText(code, options: parseOptions);
 
                 // TODO error cheecking, in case the file doesn't have a Namespace, Class or any valid Methods!
                 var @namespace = NodesOfType<NamespaceDeclarationSyntax>(benchmarkTree).FirstOrDefault();
                 var namespaceName = @namespace.Name.ToString();
+                // TODO we're not robust to having multiple classes in 1 file, we need to find the class that contains the [Benchmark] methods!!
                 var @class = NodesOfType<ClassDeclarationSyntax>(benchmarkTree).FirstOrDefault();
                 var className = @class.Identifier.ToString();
                 var allMethods = NodesOfType<MethodDeclarationSyntax>(benchmarkTree);
@@ -66,8 +65,11 @@ namespace MiniBench
                 //allSyntaxTrees.Add(generatedLauncher);
             }
 
-            var generatedLauncher = GenerateLauncher("MiniBench.Demo", "SampleDeadCodeElimination", outputDirectory);
+            //var generatedLauncher = GenerateLauncher("MiniBench.Demo", "SampleDeadCodeElimination", outputDirectory);
+            var generatedLauncher = GenerateLauncher("MiniBench.Demo", "SampleSlowDelegates", outputDirectory);
+            //var generatedLauncher = GenerateLauncher("MiniBench.Demo", "SampleStopwatchTimestamp", outputDirectory);
             //var generatedLauncher = GenerateLauncher("MiniBench.Demo", "SampleConstantFolding", outputDirectory);
+            //var generatedLauncher = GenerateLauncher("MiniBench.Demo", "JonSkeetReadonlyFields", outputDirectory);
             allSyntaxTrees.Add(generatedLauncher);
 
             CompileAndEmitCode(allSyntaxTrees, emitToDisk: true);
@@ -75,7 +77,6 @@ namespace MiniBench
 
         private List<SyntaxTree> GenerateRunners(IList<MethodDeclarationSyntax> methods, string namespaceName, string className, string outputDirectory)
         {
-            var modifiers = methods.Select(m => m.Modifiers).ToList();
             var benchmarkAttribute = typeof(BenchmarkAttribute).Name.Replace("Attribute", "");
             var validMethods = methods.Where(m => m.Modifiers.Any(mod => mod.CSharpKind() == SyntaxKind.PublicKeyword))
                                       .Where(m => m.AttributeLists.SelectMany(atrl => atrl.Attributes)
@@ -97,19 +98,16 @@ namespace MiniBench
                 var codeGenTimer = Stopwatch.StartNew();
                 var returnType = method.ReturnType as PredefinedTypeSyntax;
                 var generateBlackhole = returnType.Keyword.CSharpKind() != SyntaxKind.VoidKeyword;
-                Console.WriteLine("*** method.ReturnType = {0}, (returnType.Keyword.CSharpKind() == SyntaxKind.VoidKeyword) = {1}, generateBlackHole = {2}",
-                                    returnType, returnType.Keyword.CSharpKind() == SyntaxKind.VoidKeyword, generateBlackhole);
                 var generatedBenchmark = BenchmarkTemplate.ProcessCodeTemplates(namespaceName, className, methodName, generatedClassName, generateBlackhole);
                 var generatedRunnerTree = CSharpSyntaxTree.ParseText(generatedBenchmark, options: parseOptions, path: outputFileName, encoding: defaultEncoding);
                 generatedRunners.Add(generatedRunnerTree);
                 codeGenTimer.Stop();
-                Console.WriteLine("Took {0} ({1,5:N0}ms) - to generate CSharp Syntax Tree", codeGenTimer.Elapsed, codeGenTimer.ElapsedMilliseconds);
+                Console.WriteLine("Took {0} ({1,7:N2}ms) - to generate CSharp Syntax Tree", codeGenTimer.Elapsed, codeGenTimer.ElapsedMilliseconds);
 
                 var fileWriteTimer = Stopwatch.StartNew();
                 File.WriteAllText(outputFileName, generatedRunnerTree.GetRoot().ToFullString(), encoding: defaultEncoding);
                 fileWriteTimer.Stop();
-
-                Console.WriteLine("Took {0} ({1,5:N0}ms) - to write file to disk", fileWriteTimer.Elapsed, fileWriteTimer.ElapsedMilliseconds);
+                Console.WriteLine("Took {0} ({1,7:N2}ms) - to write file to disk", fileWriteTimer.Elapsed, fileWriteTimer.ElapsedMilliseconds);
                 Console.WriteLine("Generated file: {0}\n", fileName);
             }
             return generatedRunners;
@@ -120,8 +118,15 @@ namespace MiniBench
             var generatedLauncher = BenchmarkTemplate.ProcessLauncherTemplate(namespaceName, className);
             var fileName = "Generated_Launcher.cs";
             var outputFileName = Path.Combine(outputDirectory, fileName);
+            var codeGenTimer = Stopwatch.StartNew();
             var generatedLauncherTree = CSharpSyntaxTree.ParseText(generatedLauncher, options: parseOptions, path: outputFileName, encoding: defaultEncoding);
+            codeGenTimer.Stop();
+            Console.WriteLine("Took {0} ({1,7:N2}ms) - to generate CSharp Syntax Tree", codeGenTimer.Elapsed, codeGenTimer.ElapsedMilliseconds);
+
+            var fileWriteTimer = Stopwatch.StartNew();
             File.WriteAllText(outputFileName, generatedLauncherTree.GetRoot().ToFullString(), encoding: defaultEncoding);
+            fileWriteTimer.Stop();
+            Console.WriteLine("Took {0} ({1,7:N2}ms) - to write file to disk", fileWriteTimer.Elapsed, fileWriteTimer.ElapsedMilliseconds);
             Console.WriteLine("Generated file: " + fileName);
 
             return generatedLauncherTree;
@@ -155,28 +160,25 @@ namespace MiniBench
                                             outputKind: OutputKind.ConsoleApplication,
                                             mainTypeName: "MiniBench.Benchmarks.Program",
                                             optimizationLevel: OptimizationLevel.Release);
-            // TODO decide if this is a good idea or not?? We are re-writing over the top of the file that VS has just built!
-            // But it does mean that you can use the Test Runner in VS to run the Integration Tests :-)
-            var generatedCodeName = "MiniBench.Demo"; // "Benchmark";
 
             // One call here will be sloooowww (probably Create() or Emit()), because it causes a load/JIT of certain parts of Roslyn
             // see https://roslyn.codeplex.com/discussions/573503 for a full explanation (JITting of Roslyn dll's is the main cause)
 
             var compilationTimer = Stopwatch.StartNew();
-            var compilation = CSharpCompilation.Create(generatedCodeName, allSyntaxTrees, GetRequiredReferences(), compilationOptions);
+            var compilation = CSharpCompilation.Create(projectSettings.OutputFileName, allSyntaxTrees, GetRequiredReferences(), compilationOptions);
             compilationTimer.Stop();
-            Console.WriteLine("Took {0} ({1,5:N0}ms) - to create the CSharpCompilation", compilationTimer.Elapsed, compilationTimer.ElapsedMilliseconds);
+            Console.WriteLine("\nTook {0} ({1,7:N2}ms) - to create the CSharpCompilation", compilationTimer.Elapsed, compilationTimer.ElapsedMilliseconds);
 
             if (emitToDisk)
             {
                 Console.WriteLine("\nCurrent directory: " + Environment.CurrentDirectory);
                 var codeEmitToDiskTimer = Stopwatch.StartNew();
-                var emitToDiskResult = compilation.Emit(outputPath: generatedCodeName + ".exe",
-                                                        pdbPath: generatedCodeName + ".pdb",
-                                                        xmlDocumentationPath: generatedCodeName + ".xml");
+                var emitToDiskResult = compilation.Emit(outputPath: projectSettings.OutputFileName + projectSettings.OutputFileExtension,
+                                                        pdbPath: projectSettings.OutputFileName + ".pdb",
+                                                        xmlDocumentationPath: projectSettings.OutputFileName + ".xml");
                 codeEmitToDiskTimer.Stop();
+                Console.WriteLine("Took {0} ({1,7:N2}ms) - to emit generated code to DISK", codeEmitToDiskTimer.Elapsed, codeEmitToDiskTimer.ElapsedMilliseconds);
                 Console.WriteLine("Emit to DISK Success: {0}\n  {1}", emitToDiskResult.Success, string.Join("\n  ", emitToDiskResult.Diagnostics));
-                Console.WriteLine("Took {0} ({1,5:N0}ms) - to emit generated code to DISK", codeEmitToDiskTimer.Elapsed, codeEmitToDiskTimer.ElapsedMilliseconds);
             }
         }
 
@@ -193,9 +195,9 @@ namespace MiniBench
                     // and http://source.roslyn.codeplex.com/#Roslyn.Test.Utilities/TestBase.cs,d7b20a77e5912080
                     // and http://source.roslyn.codeplex.com/#Roslyn.Compilers.CSharp.Symbol.UnitTests/Compilation/ReferenceManagerTests.cs,a90d68f18e804c1a,references
 
-                    //MetadataReference.CreateFromAssembly(typeof(String).Assembly),
+                    MetadataReference.CreateFromAssembly(typeof(String).Assembly),
                     //MetadataReference.CreateFromAssembly(Assembly.Load("mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")),
-                    MetadataReference.CreateFromAssembly(Assembly.LoadFile(@"C:\Windows\Microsoft.NET\Framework64\v2.0.50727\mscorlib.dll")),
+                    //MetadataReference.CreateFromAssembly(Assembly.LoadFile(@"C:\Windows\Microsoft.NET\Framework64\v2.0.50727\mscorlib.dll")),
                     //MetadataReference.CreateFromAssembly(Assembly.LoadFrom(@"C:\Windows\Microsoft.NET\Framework64\v2.0.50727\mscorlib.dll")),
                     //MetadataReference.CreateFromAssembly(Assembly.LoadFrom(@"C:\Windows\Microsoft.NET\Framework\v2.0.50727\mscorlib.dll")),
 
@@ -204,9 +206,9 @@ namespace MiniBench
                 };
 
             // Now add the references we need from the .csproj file
-            foreach (var reference in references)
+            foreach (var reference in projectSettings.References)
             {
-                standardReferences.Add(MetadataReference.CreateFromFile(Path.Combine(rootFolder, reference.Item2)));
+                standardReferences.Add(MetadataReference.CreateFromFile(Path.Combine(projectSettings.RootFolder, reference.Item2)));
             }
 
             return standardReferences;

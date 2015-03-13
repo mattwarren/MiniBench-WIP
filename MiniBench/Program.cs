@@ -28,10 +28,9 @@ namespace MiniBench
 
             Console.WriteLine("Compiling Benchmark code into an self-contained Benchmark.exe using:\n\t{0}\n", projectFileName);
             var projectParser = new ProjectFileParser();
-            var sourceFiles = projectParser.GetSourceFiles(projectFileName);
-            var references = projectParser.GetReferences(projectFileName);
+            var projectSettings = projectParser.ParseProjectFile(projectFileName);
 
-            var generator = new CodeGenerator(Path.GetDirectoryName(projectFileName), sourceFiles, references);
+            var generator = new CodeGenerator(projectSettings);
             generator.GenerateCode();
 
             return 0;

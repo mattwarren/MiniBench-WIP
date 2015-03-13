@@ -22,9 +22,6 @@ namespace MiniBench.Demo
         // 24 => 00:00:00.0092931   9.29 ms
         // 25 => 00:00:00.2817894 281.79 ms
 
-
-C:\Users\warma11\Documents\Visual Studio 2013\Projects\SlowDelegateBenchmark\SlowDelegateBenchmark\bin\Release>
-
         [Benchmark]
         public void Case22()
         {
