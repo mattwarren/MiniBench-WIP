@@ -1,5 +1,6 @@
 ﻿using MiniBench.Core;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace MiniBench.Demo
 {
@@ -7,6 +8,7 @@ namespace MiniBench.Demo
     class SampleDeadCodeElimination
     {
         private double x = Math.PI;
+        private Blackhole blackhole = new Blackhole();
 
         [Benchmark]
         public void baseline()
@@ -19,14 +21,59 @@ namespace MiniBench.Demo
         public void measureWrong()
         {
             // This is wrong: result is not used, and the entire computation is optimized out.
-            Math.Log(x);
+            Math.Sqrt(x);
+        }
+
+        [Benchmark]
+        public void measureBlackholeConsume()
+        {
+            // This is wrong: result is not used, and the entire computation is optimized out.
+            blackhole.Consume(Math.Sqrt(x));
+        }
+
+        [Benchmark]
+        public void measureBlackholeConsumeAggressiveInlining()
+        {
+            // This is wrong: result is not used, and the entire computation is optimized out.
+            blackhole.ConsumeAggressiveInlining(Math.Sqrt(x));
+        }
+
+        [Benchmark]
+        public void measureBlackholeConsumeJavaMethod()
+        {
+            // This is wrong: result is not used, and the entire computation is optimized out.
+            blackhole.ConsumeJavaMethod(Math.Sqrt(x));
         }
 
         [Benchmark]
         public double measureRight()
         {
             // This is correct: the result is being used.
-            return Math.Log(x);
+            return Math.Sqrt(x);
         }
+
+        //[Benchmark]
+        //public int NoInliningMethodCall()
+        //{
+        //    return NoInliningMethod();
+        //}
+
+        //[Benchmark]
+        //public int AggressiveInliningMethodCall()
+        //{
+        //    return AggressiveInliningMethod();
+        //}
+
+        //[MethodImpl(MethodImplOptions.NoInlining)]
+        //private int NoInliningMethod()
+        //{
+        //    return 1;
+        //}
+
+        //[MethodImpl(MethodImplOptions.AggressiveInlining)]
+        //private int AggressiveInliningMethod()
+        //{
+        //    return 1;
+        //}
     }
 }

@@ -1,4 +1,5 @@
 ﻿using MiniBench.Core;
+using System;
 using System.Diagnostics;
 
 namespace MiniBench.Demo
@@ -33,20 +34,38 @@ namespace MiniBench.Demo
         }
 
         [Benchmark]
-        public long Latency()
+        public long StopwatchLatency()
         {
             // See http://shipilev.net/blog/2014/nanotrusting-nanotime/#_latency
             return Stopwatch.GetTimestamp();
         }
 
         [Benchmark]
-        public long Granularity()
+        public long StopwatchGranularity()
         {
             // See http://shipilev.net/blog/2014/nanotrusting-nanotime/#_granularity
             long current, lastValue  = Stopwatch.GetTimestamp();
             do
             {
                 current = Stopwatch.GetTimestamp();
+            } while (current == lastValue);
+            lastValue = current;
+            return current;
+        }
+
+        [Benchmark]
+        public long DateTimeLatency()
+        {
+            return DateTime.Now.Ticks;
+        }
+
+        [Benchmark]
+        public long DateTimeGranularity()
+        {
+            long current, lastValue = DateTime.Now.Ticks;
+            do
+            {
+                current = DateTime.Now.Ticks;
             } while (current == lastValue);
             lastValue = current;
             return current;
