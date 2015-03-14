@@ -2,32 +2,10 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Xml;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace MiniBench
 {
-    public class ProjectSettings
-    {
-        public string RootFolder { get; private set; }
-
-        public string OutputFileName { get; private set; }
-        
-        public string OutputFileExtension { get; private set; }
-
-        public IList<String> SourceFiles { get; private set; }
-
-        public IList<Tuple<String, String>> References { get; private set; }
-        
-        public ProjectSettings(string rootFolder, string outputFileName, string outputFileExtension, 
-                               IList<String> sourceFiles, IList<Tuple<String, String>> references)
-        {
-            RootFolder = rootFolder;
-            OutputFileName = outputFileName;
-            OutputFileExtension = outputFileExtension;
-            References = references;
-            SourceFiles = sourceFiles;
-        }       
-    }
-
     internal class ProjectFileParser
     {
         internal ProjectSettings ParseProjectFile(string csprojPath)
@@ -41,12 +19,15 @@ namespace MiniBench
 
             Console.WriteLine("Reading from " + csprojPath);
 
-            return new ProjectSettings(
+            return new ProjectSettings
+            (
                 Path.GetDirectoryName(csprojPath),
                 GetOutputFileName(xmldoc, mgr),
                 GetOutputFileExtension(xmldoc, mgr),
+                GetTargetFrameworkVersion(xmldoc, mgr),
                 GetSourceFiles(xmldoc, mgr),
-                GetReferences(xmldoc, mgr));
+                GetReferences(xmldoc, mgr)
+            );
         }
 
         private String GetOutputFileName(XmlDocument xmldoc, XmlNamespaceManager mgr)
@@ -59,7 +40,6 @@ namespace MiniBench
             }
 
             return "Unknown";
-
         }
 
         private String GetOutputFileExtension(XmlDocument xmldoc, XmlNamespaceManager mgr)
@@ -75,6 +55,30 @@ namespace MiniBench
             }
 
             return ".Unknown";
+        }
+
+        private LanguageVersion GetTargetFrameworkVersion(XmlDocument xmldoc, XmlNamespaceManager mgr)
+        {
+            XmlNode item = xmldoc.SelectSingleNode("//x:TargetFrameworkVersion", mgr);
+            Console.WriteLine("TargetFrameworkVersion: " + (item != null ? item.InnerText : "<NULL>"));
+            if (item != null)
+            {
+                if (item.InnerText.StartsWith("v1."))
+                    return LanguageVersion.CSharp1;
+                else if (item.InnerText.StartsWith("v2."))
+                    return LanguageVersion.CSharp2;
+                else if (item.InnerText.StartsWith("v3."))
+                    return LanguageVersion.CSharp3;
+                else if (item.InnerText.StartsWith("v4."))
+                    return LanguageVersion.CSharp4;
+                else if (item.InnerText.StartsWith("v5."))
+                    return LanguageVersion.CSharp5;
+                else if (item.InnerText.StartsWith("v6."))
+                    return LanguageVersion.CSharp6;
+            }
+
+            // Default to CSharp2
+            return LanguageVersion.CSharp2;
         }
 
         private IList<String> GetSourceFiles(XmlDocument xmldoc, XmlNamespaceManager mgr)

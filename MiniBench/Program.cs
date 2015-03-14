@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 
-
 namespace MiniBench
 {
     /// <summary>
