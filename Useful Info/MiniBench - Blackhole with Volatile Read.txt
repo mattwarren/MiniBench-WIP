@@ -1,0 +1,43 @@
+Running benchmark: JonSkeetReadonlyFields.SlowVersion
+Warmup:     273,529,031 iterations in 10,000.000 ms, 36.559 ns/op
+Benchmark:  273,529,031 iterations in  5,848.226 ms, 21.381 ns/op
+Benchmark:  273,529,031 iterations in  5,854.869 ms, 21.405 ns/op
+Benchmark:  273,529,031 iterations in  5,852.410 ms, 21.396 ns/op
+Benchmark:  273,529,031 iterations in  5,846.447 ms, 21.374 ns/op
+
+Running benchmark: JonSkeetReadonlyFields.FastVersion
+Warmup:     358,468,559 iterations in 10,000.000 ms, 27.896 ns/op
+Benchmark:  358,468,559 iterations in  5,198.256 ms, 14.501 ns/op
+Benchmark:  358,468,559 iterations in  5,198.850 ms, 14.503 ns/op
+Benchmark:  358,468,559 iterations in  5,218.931 ms, 14.559 ns/op
+Benchmark:  358,468,559 iterations in  5,224.177 ms, 14.574 ns/op
+
+Running benchmark: JonSkeetReadonlyFields.EvenFasterVersion
+Warmup:     370,110,172 iterations in 10,000.000 ms, 27.019 ns/op
+Benchmark:  370,110,172 iterations in  5,012.923 ms, 13.544 ns/op
+Benchmark:  370,110,172 iterations in  5,032.580 ms, 13.598 ns/op
+Benchmark:  370,110,172 iterations in  4,994.705 ms, 13.495 ns/op
+Benchmark:  370,110,172 iterations in  4,971.037 ms, 13.431 ns/op
+
+#################################################################
+
+Running benchmark: SampleDeadCodeElimination.baseline
+Warmup:     622,121,917 iterations in 10,000.003 ms, 16.074 ns/op
+Benchmark:  622,121,730 iterations in    183.329 ms,  0.295 ns/op
+Benchmark:  622,121,730 iterations in    183.199 ms,  0.294 ns/op
+Benchmark:  622,121,730 iterations in    183.066 ms,  0.294 ns/op
+Benchmark:  622,121,730 iterations in    181.017 ms,  0.291 ns/op
+
+Running benchmark: SampleDeadCodeElimination.measureWrong
+Warmup:     404,360,450 iterations in 10,000.000 ms, 24.730 ns/op
+Benchmark:  404,360,450 iterations in  3,284.631 ms,  8.123 ns/op
+Benchmark:  404,360,450 iterations in  3,291.451 ms,  8.140 ns/op
+Benchmark:  404,360,450 iterations in  3,275.530 ms,  8.101 ns/op
+Benchmark:  404,360,450 iterations in  3,302.998 ms,  8.168 ns/op
+
+Running benchmark: SampleDeadCodeElimination.measureRight
+Warmup:     272,203,052 iterations in 10,000.000 ms, 36.737 ns/op
+Benchmark:  272,203,052 iterations in  5,405.266 ms, 19.857 ns/op
+Benchmark:  272,203,052 iterations in  5,406.018 ms, 19.860 ns/op
+Benchmark:  272,203,052 iterations in  5,409.911 ms, 19.875 ns/op
+Benchmark:  272,203,052 iterations in  5,404.112 ms, 19.853 ns/op

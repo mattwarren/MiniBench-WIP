@@ -1,0 +1,39 @@
+
+C:\Users\warma11\Downloads\__GitHub__\MiniBench-WIP\MiniBench.Demo\bin\Release>MiniBench.Demo.exe
+Running benchmark: SampleStopwatchTimestamp.baseline
+Warmup:     658,942,651 iterations in 10,000.003 ms, 15.176 ns/op
+Benchmark:  658,942,479 iterations in    183.095 ms,  0.278 ns/op
+Benchmark:  658,942,479 iterations in    179.798 ms,  0.273 ns/op
+Benchmark:  658,942,479 iterations in    179.774 ms,  0.273 ns/op
+Benchmark:  658,942,479 iterations in    180.543 ms,  0.274 ns/op
+
+Running benchmark: SampleStopwatchTimestamp.StopwatchLatency
+Warmup:     248,749,542 iterations in 10,000.000 ms, 40.201 ns/op
+Benchmark:  248,749,542 iterations in  6,024.721 ms, 24.220 ns/op
+Benchmark:  248,749,542 iterations in  6,136.117 ms, 24.668 ns/op
+Benchmark:  248,749,542 iterations in  6,041.953 ms, 24.289 ns/op
+Benchmark:  248,749,542 iterations in  6,017.474 ms, 24.191 ns/op
+
+Running benchmark: SampleStopwatchTimestamp.StopwatchGranularity
+Warmup:      26,129,401 iterations in 10,000.000 ms, 382.711 ns/op
+Benchmark:   26,129,401 iterations in  9,998.524 ms, 382.654 ns/op
+Benchmark:   26,129,401 iterations in  9,996.202 ms, 382.565 ns/op
+Benchmark:   26,129,401 iterations in  9,995.923 ms, 382.555 ns/op
+Benchmark:   26,129,401 iterations in 10,268.967 ms, 393.004 ns/op
+
+Running benchmark: SampleStopwatchTimestamp.DateTimeLatency
+Warmup:      43,841,932 iterations in 10,000.000 ms, 228.092 ns/op
+Benchmark:   43,841,932 iterations in  8,866.609 ms, 202.240 ns/op
+Benchmark:   43,841,932 iterations in  8,851.368 ms, 201.893 ns/op
+Benchmark:   43,841,932 iterations in  9,024.634 ms, 205.845 ns/op
+Benchmark:   43,841,932 iterations in  8,990.721 ms, 205.071 ns/op
+
+Running benchmark: SampleStopwatchTimestamp.DateTimeGranularity
+Warmup:             642 iterations in 10,014.018 ms, 15,598,158.625 ns/op
+Benchmark:          641 iterations in  9,998.078 ms, 15,597,625.218 ns/op
+Benchmark:          641 iterations in  9,998.729 ms, 15,598,641.622 ns/op
+Benchmark:          641 iterations in  9,998.749 ms, 15,598,671.865 ns/op
+Benchmark:          641 iterations in  9,998.681 ms, 15,598,566.311 ns/op
+
+
+C:\Users\warma11\Downloads\__GitHub__\MiniBench-WIP\MiniBench.Demo\bin\Release>

@@ -1,0 +1,41 @@
+Benchmark:  617,852,436 iterations in    183.221 ms,  0.297 ns/op
+    41:                 // Make sure the method is JIT-compiled.
+    42:                 benchmarkClass.measureWrong();
+000000d7  movsd       xmm0,mmword ptr [rbx+10h] 
+    43: 
+    44:                 GC.Collect();
+
+
+Benchmark:  605,462,529 iterations in  1,597.987 ms,  2.639 ns/op
+    41:                 // Make sure the method is JIT-compiled.
+    42:                 benchmarkClass.measureBlackholeConsume();
+000000d9  mov         rcx,qword ptr [rbx+8] 
+000000dd  sqrtsd      xmm0,mmword ptr [rbx+10h] 
+000000e2  movsd       xmm1,mmword ptr [rcx+10h] 
+000000e7  addsd       xmm0,xmm1 
+000000eb  movsd       mmword ptr [rcx+10h],xmm0 
+    43: 
+    44:                 GC.Collect();
+
+
+Benchmark:  607,433,235 iterations in  1,562.086 ms,  2.572 ns/op
+    41:                 // Make sure the method is JIT-compiled.
+    42:                 benchmarkClass.measureBlackholeConsumeAggressiveInlining();
+000000d9  mov         rcx,qword ptr [rbx+8] 
+000000dd  sqrtsd      xmm0,mmword ptr [rbx+10h] 
+000000e2  movsd       xmm1,mmword ptr [rcx+10h] 
+000000e7  addsd       xmm0,xmm1 
+000000eb  movsd       mmword ptr [rcx+10h],xmm0 
+    43: 
+    44:                 GC.Collect();
+
+
+Benchmark:  483,198,399 iterations in  3,659.727 ms,  7.574 ns/op
+    41:                 // Make sure the method is JIT-compiled.
+    42:                 benchmarkClass.measureBlackholeConsumeJavaMethod();
+000000d9  sqrtsd      xmm1,mmword ptr [rbx+10h] 
+000000de  mov         rcx,qword ptr [rbx+8] 
+000000e2  cmp         dword ptr [rcx],ecx 
+000000e4  call        FFFFFFFFFFFFF0E8          //blackhole.ConsumeJavaMethod(..)
+    43: 
+    44:                 GC.Collect();

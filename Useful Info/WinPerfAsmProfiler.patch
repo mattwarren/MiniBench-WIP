@@ -1,0 +1,3069 @@
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/profile/AbstractPerfAsmProfiler.java
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/jmh-core/src/main/java/org/openjdk/jmh/profile/AbstractPerfAsmProfiler.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -0,0 +1,1061 @@
++/*
++ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.  Oracle designates this
++ * particular file as subject to the "Classpath" exception as provided
++ * by Oracle in the LICENSE file that accompanied this code.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++package org.openjdk.jmh.profile;
++
++import org.openjdk.jmh.infra.BenchmarkParams;
++import org.openjdk.jmh.results.AggregationPolicy;
++import org.openjdk.jmh.results.Aggregator;
++import org.openjdk.jmh.results.Result;
++import org.openjdk.jmh.results.ResultRole;
++import org.openjdk.jmh.util.FileUtils;
++import org.openjdk.jmh.util.HashMultimap;
++import org.openjdk.jmh.util.HashMultiset;
++import org.openjdk.jmh.util.Multimap;
++import org.openjdk.jmh.util.Multiset;
++import org.openjdk.jmh.util.Multisets;
++import org.openjdk.jmh.util.Utils;
++
++import java.io.BufferedReader;
++import java.io.File;
++import java.io.FileOutputStream;
++import java.io.FileReader;
++import java.io.IOException;
++import java.io.PrintWriter;
++import java.io.StringWriter;
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.Collection;
++import java.util.Collections;
++import java.util.Comparator;
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.List;
++import java.util.Map;
++import java.util.Set;
++import java.util.SortedMap;
++import java.util.SortedSet;
++import java.util.TreeMap;
++import java.util.TreeSet;
++import java.util.concurrent.TimeUnit;
++import java.util.regex.Matcher;
++import java.util.regex.Pattern;
++
++
++/**
++ *
++ */
++public abstract class AbstractPerfAsmProfiler implements ExternalProfiler {
++    /**
++     * Events to gather.
++     */
++    protected static volatile String[] EVENTS;
++
++    /**
++     * Error messages caught during support check.
++     */
++    protected static final Collection<String> FAIL_MSGS = new ArrayList<String>();
++
++    /**
++     * Cutoff threshold for hot region: the regions with event count over threshold would be shown
++     */
++    private static final double THRESHOLD_RATE = Double.valueOf(System.getProperty("jmh.perfasm.hotThreshold", "0.10"));
++
++    /**
++     * Show this number of top hottest code regions
++     */
++    private static final int SHOW_TOP = Integer.getInteger("jmh.perfasm.top", 20);
++
++    /**
++     * Cutoff threshold for large region: the region larger than this would be truncated
++     */
++    private static final int THRESHOLD_TOO_BIG = Integer.getInteger("jmh.perfasm.tooBigThreshold", 1000);
++
++    /**
++     * Print margin: how many "context" lines without counters to show in each region
++     */
++    private static final int PRINT_MARGIN = Integer.getInteger("jmh.perfasm.printMargin", 10);
++
++    /**
++     * Merge margin: the regions separated by less than the margin are considered the same
++     */
++    private static final int MERGE_MARGIN = Integer.getInteger("jmh.perfasm.mergeMargin", 32);
++
++    /**
++     * Delay collection for given time; -1 to detect automatically
++     */
++    private static final int DELAY_MSEC = Integer.getInteger("jmh.perfasm.delayMs", -1);
++
++    /**
++     * Do -XX:+PrintAssembly instrumentation?
++     */
++    private static final Boolean SKIP_ASSEMBLY = Boolean.getBoolean("jmh.perfasm.skipAsm");
++
++    /**
++     * Skip printing out interpreter stubs. This may improve the parser performance at the expense
++     * of missing the resolution and disassembly of interpreter regions.
++     */
++    private static final Boolean SKIP_INTERPRETER = Boolean.getBoolean("jmh.perfasm.skipInterpreter");
++
++    /**
++     * Skip printing out VM stubs. This may improve the parser performance at the expense
++     * of missing the resolution and disassembly of VM stub regions.
++     */
++    private static final Boolean SKIP_VM_STUBS = Boolean.getBoolean("jmh.perfasm.skipVMStubs");
++
++    /**
++     * Save perf output to file?
++     */
++    private static final Boolean SAVE_PERF_OUTPUT = Boolean.getBoolean("jmh.perfasm.savePerf");
++
++    /**
++     * Override the perf output location
++     */
++    private static final String SAVE_PERF_OUTPUT_TO = System.getProperty("jmh.perfasm.savePerfTo", ".");
++
++    /**
++     * Override the perf output filename
++     */
++    private static final String SAVE_PERF_OUTPUT_TO_FILE = System.getProperty("jmh.perfasm.savePerfToFile");
++
++    /**
++     * Save perf binary output to file?
++     */
++    private static final Boolean SAVE_PERF_BIN_OUTPUT = Boolean.getBoolean("jmh.perfasm.savePerfBin");
++
++    /**
++     * Override the perf binary output location
++     */
++    private static final String SAVE_PERF_BIN_OUTPUT_TO = System.getProperty("jmh.perfasm.savePerfBinTo", ".");
++
++    /**
++     * Override the perf binary output filename
++     */
++    private static final String SAVE_PERF_BIN_OUTPUT_TO_FILE = System.getProperty("jmh.perfasm.savePerfBinToFile");
++
++    /**
++     * Save annotated Hotspot log to file
++     */
++    private static final Boolean SAVE_LOG_OUTPUT = Boolean.getBoolean("jmh.perfasm.saveLog");
++
++    /**
++     * Override the annotated Hotspot log location
++     */
++    private static final String SAVE_LOG_OUTPUT_TO = System.getProperty("jmh.perfasm.saveLogTo", ".");
++
++    /**
++     * Override the annotated Hotspot log filename
++     */
++    private static final String SAVE_LOG_OUTPUT_TO_FILE = System.getProperty("jmh.perfasm.saveLogToFile");
++
++    /**
++     * Print the collateral compilation information.
++     * Enabling this might corrupt the assembly output, see https://bugs.openjdk.java.net/browse/CODETOOLS-7901102
++     */
++    private static final Boolean PRINT_COMPILATION_INFO = Boolean.getBoolean("jmh.perfasm.printCompilationInfo");
++
++    /**
++     * Override the default assembly syntax
++     */
++    private static final String ASSEMBLY_SYNTAX = System.getProperty("jmh.perfasm.assemblySyntax");
++
++    protected String hsLog;
++    protected String perfBinData;
++    protected String perfParsedData;
++
++    protected AbstractPerfAsmProfiler() throws IOException {
++        hsLog = FileUtils.tempFile("hslog").getAbsolutePath();
++        perfBinData = FileUtils.tempFile("perfbin").getAbsolutePath();
++        perfParsedData = FileUtils.tempFile("perfparsed").getAbsolutePath();
++    }
++
++    @Override
++    public boolean checkSupport(List<String> msgs) {
++        if (FAIL_MSGS.isEmpty()) {
++            return true;
++        } else {
++            msgs.addAll(FAIL_MSGS);
++            return false;
++        }
++    }
++
++    @Override
++    public Collection<String> addJVMOptions(BenchmarkParams params) {
++        if (!SKIP_ASSEMBLY) {
++            Collection<String> opts = new ArrayList<String>();
++            opts.addAll(Arrays.asList(
++                "-XX:+UnlockDiagnosticVMOptions",
++                "-XX:+LogCompilation",
++                "-XX:LogFile=" + hsLog,
++                "-XX:+PrintAssembly"));
++
++            if (!SKIP_INTERPRETER) {
++                opts.add("-XX:+PrintInterpreter");
++            }
++            if (!SKIP_VM_STUBS) {
++                opts.add("-XX:+PrintNMethods");
++                opts.add("-XX:+PrintNativeNMethods");
++                opts.add("-XX:+PrintSignatureHandlers");
++                opts.add("-XX:+PrintAdapterHandlers");
++                opts.add("-XX:+PrintStubCode");
++            }
++            if (PRINT_COMPILATION_INFO) {
++                opts.add("-XX:+PrintCompilation");
++                opts.add("-XX:+PrintInlining");
++                opts.add("-XX:+TraceClassLoading");
++            }
++            if (ASSEMBLY_SYNTAX != null) {
++                opts.add("-XX:PrintAssemblyOptions=" + ASSEMBLY_SYNTAX);
++            }
++            return opts;
++        } else {
++            return Collections.emptyList();
++        }
++    }
++
++    @Override
++    public Collection<? extends Result> afterTrial(BenchmarkParams params, File stdOut, File stdErr) {
++        PerfResult result = processAssembly(params, stdOut, stdErr);
++
++        return Collections.singleton(result);
++    }
++
++    @Override
++    public boolean allowPrintOut() {
++        return false;
++    }
++
++    @Override
++    public boolean allowPrintErr() {
++        return false;
++    }
++
++    /**
++     * Parse profiler events from binary to text form.
++     */
++    protected abstract void parseEvents();
++
++    /**
++     * Read parsed events.
++     *
++     * @param skipSec Seconds to skip.
++     * @return Events.
++     */
++    protected abstract PerfEvents readEvents(double skipSec);
++
++    /**
++     * Get perf binary data extension (optional).
++     *
++     * @return Extension.
++     */
++    protected abstract String perfBinaryExtension();
++
++    private PerfResult processAssembly(BenchmarkParams params, File stdOut, File stdErr) {
++        /**
++         * 1. Parse binary events.
++         */
++
++        parseEvents();
++
++        StringWriter sw = new StringWriter();
++        PrintWriter pw = new PrintWriter(sw);
++
++        /**
++         * 2. Read out PrintAssembly output
++         */
++
++        Assembly assembly = readAssembly(new File(hsLog));
++        if (assembly.size() > 0) {
++            pw.printf("PrintAssembly processed: %d total address lines.%n", assembly.size());
++        } else if (SKIP_ASSEMBLY) {
++            pw.println();
++            pw.println("PrintAssembly skipped, Java methods are not resolved.");
++            pw.println();
++        } else {
++            pw.println();
++            pw.println("ERROR: No address lines detected in assembly capture, make sure your JDK is PrintAssembly-enabled:\n    https://wikis.oracle.com/display/HotSpotInternals/PrintAssembly");
++            pw.println();
++        }
++
++        /**
++         * 3. Read out perf output
++         */
++
++        long delayNs;
++        if (DELAY_MSEC == -1) { // not set
++            delayNs = params.getWarmup().getCount() *
++                params.getWarmup().getTime().convertTo(TimeUnit.NANOSECONDS)
++                + TimeUnit.SECONDS.toNanos(1); // loosely account for the JVM lag
++        } else {
++            delayNs = TimeUnit.MILLISECONDS.toNanos(DELAY_MSEC);
++        }
++
++        double skipSec = 1.0 * delayNs / TimeUnit.SECONDS.toNanos(1);
++
++        final PerfEvents events = readEvents(skipSec);
++
++        if (!events.isEmpty()) {
++            pw.printf("Perf output processed (skipped %.3f seconds):%n", skipSec);
++            int cnt = 1;
++            for (String event : EVENTS) {
++                pw.printf(" Column %d: %s (%d events)%n", cnt, event, events.get(event).size());
++                cnt++;
++            }
++            pw.println();
++        } else {
++            pw.println();
++            pw.println("ERROR: No perf data, make sure \"perf stat echo 1\" is indeed working;\n " +
++                "or the collection delay is not running past the benchmark time.");
++            pw.println();
++        }
++
++        /**
++         * 4. Figure out code regions
++         */
++
++        final List<Region> regions = makeRegions(assembly, events);
++
++        /**
++         * 5. Figure out interesting regions, and print them out.
++         * We would sort the regions by the hotness of the first (main) event type.
++         */
++
++        final String mainEvent = EVENTS[0];
++
++        Collections.sort(regions, new Comparator<Region>() {
++            @Override
++            public int compare(Region o1, Region o2) {
++                return Long.valueOf(o2.getEventCount(events, mainEvent)).
++                    compareTo(o1.getEventCount(events, mainEvent));
++            }
++        });
++
++        long threshold = (long) (THRESHOLD_RATE * events.getTotalEvents(mainEvent));
++
++        boolean headerPrinted = false;
++
++        int cnt = 1;
++        for (Region r : regions) {
++            if (r.getEventCount(events, mainEvent) > threshold) {
++                if (!headerPrinted) {
++                    pw.printf("Hottest code regions (>%.2f%% \"%s\" events):%n", THRESHOLD_RATE * 100, mainEvent);
++                    headerPrinted = true;
++                }
++
++                printDottedLine(pw, "Hottest Region " + cnt);
++                pw.printf(" [0x%x:0x%x] in %s%n%n", r.begin, r.end, r.getName());
++                r.printCode(pw, events);
++
++                printDottedLine(pw);
++                for (String event : EVENTS) {
++                    printLine(pw, events, event, r.getEventCount(events, event));
++                }
++                pw.println("<total for region " + cnt + ">");
++                pw.println();
++                cnt++;
++            }
++        }
++
++        /**
++         * 6. Print out the hottest regions
++         */
++        {
++            Multiset<String> total = new HashMultiset<String>();
++            Multiset<String> other = new HashMultiset<String>();
++
++            printDottedLine(pw, "Hottest Regions");
++            int shown = 0;
++            for (Region r : regions) {
++                if (shown++ < SHOW_TOP) {
++                    for (String event : EVENTS) {
++                        printLine(pw, events, event, r.getEventCount(events, event));
++                    }
++                    pw.printf("[0x%x:0x%x] in %s%n", r.begin, r.end, r.getName());
++                } else {
++                    for (String event : EVENTS) {
++                        other.add(event, r.getEventCount(events, event));
++                    }
++                }
++                for (String event : EVENTS) {
++                    total.add(event, r.getEventCount(events, event));
++                }
++            }
++
++            if (regions.size() - SHOW_TOP > 0) {
++                for (String event : EVENTS) {
++                    printLine(pw, events, event, other.count(event));
++                }
++                pw.println("<...other " + (regions.size() - SHOW_TOP) + " warm regions...>");
++            }
++            printDottedLine(pw);
++
++            for (String event : EVENTS) {
++                printLine(pw, events, event, total.count(event));
++            }
++            pw.println("<totals>");
++            pw.println();
++        }
++
++        final Map<String, Multiset<String>> methodsByType = new HashMap<String, Multiset<String>>();
++        for (String event : EVENTS) {
++            methodsByType.put(event, new HashMultiset<String>());
++        }
++
++        /**
++         * Print out hottest methods
++         */
++        {
++            printDottedLine(pw, "Hottest Methods (after inlining)");
++
++            Map<String, Multiset<String>> methods = new HashMap<String, Multiset<String>>();
++            for (String event : EVENTS) {
++                methods.put(event, new HashMultiset<String>());
++            }
++
++            for (Region r : regions) {
++                for (String event : EVENTS) {
++                    long count = r.getEventCount(events, event);
++                    methods.get(event).add(r.getName(), count);
++                    methodsByType.get(event).add(r.getType(), count);
++                }
++            }
++
++            Multiset<String> total = new HashMultiset<String>();
++            Multiset<String> other = new HashMultiset<String>();
++
++            int shownMethods = 0;
++            List<String> top = Multisets.sortedDesc(methods.get(mainEvent));
++            for (String m : top) {
++                if (shownMethods++ < SHOW_TOP) {
++                    for (String event : EVENTS) {
++                        printLine(pw, events, event, methods.get(event).count(m));
++                    }
++                    pw.printf("%s%n", m);
++                } else {
++                    for (String event : EVENTS) {
++                        other.add(event, methods.get(event).count(m));
++                    }
++                }
++                for (String event : EVENTS) {
++                    total.add(event, methods.get(event).count(m));
++                }
++            }
++
++            if (top.size() - SHOW_TOP > 0) {
++                for (String event : EVENTS) {
++                    printLine(pw, events, event, other.count(event));
++                }
++                pw.println("<...other " + (top.size() - SHOW_TOP) + " warm methods...>");
++            }
++            printDottedLine(pw);
++
++            for (String event : EVENTS) {
++                printLine(pw, events, event, total.count(event));
++            }
++            pw.println("<totals>");
++            pw.println();
++        }
++
++        /**
++         * Print hot methods distribution
++         */
++        {
++            printDottedLine(pw, "Distribution by Area");
++
++            for (String m : Multisets.sortedDesc(methodsByType.get(mainEvent))) {
++                for (String event : EVENTS) {
++                    printLine(pw, events, event, methodsByType.get(event).count(m));
++                }
++                pw.printf("%s%n", m);
++            }
++
++            printDottedLine(pw);
++
++            for (String event : EVENTS) {
++                printLine(pw, events, event, methodsByType.get(event).size());
++            }
++
++            pw.println("<totals>");
++            pw.println();
++
++        }
++
++        /**
++         * Final checks on assembly:
++         */
++
++        {
++            Set<Long> addrHistory = new HashSet<Long>();
++            for (Long addr : assembly.addressMap.keySet()) {
++                if (!addrHistory.add(addr)) {
++                    pw.println("WARNING: Duplicate instruction addresses detected. This is probably due to compiler reusing\n " +
++                        "the code arena for the new generated code. We can not differentiate between methods sharing\n" +
++                        "the same addresses, and therefore the profile might be wrong. Increasing generated code\n" +
++                        "storage might help.");
++                }
++            }
++        }
++
++        {
++            int sum = 0;
++            for (Long v : events.totalCounts.values()) {
++                sum += v;
++            }
++
++            if (sum < 1000) {
++                pw.println("WARNING: The perf event count is suspiciously low (" + sum + "). The performance data might be\n" +
++                    "inaccurate or misleading. Try to do the profiling again, or tune up the sampling frequency.");
++            }
++        }
++
++        /**
++         * Print perf output, if needed:
++         */
++        if (SAVE_PERF_OUTPUT) {
++            String target = (SAVE_PERF_OUTPUT_TO_FILE == null) ?
++                SAVE_PERF_OUTPUT_TO + "/" + params.id() + ".perf" :
++                SAVE_PERF_OUTPUT_TO_FILE;
++            try {
++                FileUtils.copy(perfParsedData, target);
++                pw.println("Perf output saved to " + target);
++            } catch (IOException e) {
++                pw.println("Unable to save perf output to " + target);
++            }
++        }
++
++        /**
++         * Print binary perf output, if needed:
++         */
++        if (SAVE_PERF_BIN_OUTPUT) {
++            String target = (SAVE_PERF_BIN_OUTPUT_TO_FILE == null) ?
++                SAVE_PERF_BIN_OUTPUT_TO + "/" + params.id() + perfBinaryExtension() :
++                SAVE_PERF_BIN_OUTPUT_TO_FILE;
++            try {
++                FileUtils.copy(perfBinData, target);
++                pw.println("Perf binary output saved to " + target);
++            } catch (IOException e) {
++                pw.println("Unable to save perf binary output to " + target);
++            }
++        }
++
++        /**
++         * Print annotated assembly, if needed:
++         */
++        if (SAVE_LOG_OUTPUT) {
++            String target = (SAVE_LOG_OUTPUT_TO_FILE == null) ?
++                SAVE_LOG_OUTPUT_TO + "/" + params.id() + ".log" :
++                SAVE_LOG_OUTPUT_TO_FILE;
++            FileOutputStream asm;
++            try {
++                asm = new FileOutputStream(target);
++                PrintWriter pwAsm = new PrintWriter(asm);
++                for (ASMLine line : assembly.lines) {
++                    for (String event : EVENTS) {
++                        long count = (line.addr != null) ? events.get(event).count(line.addr) : 0;
++                        printLine(pwAsm, events, event, count);
++                    }
++                    pwAsm.println(line.code);
++                }
++                pwAsm.flush();
++                FileUtils.safelyClose(asm);
++
++                pw.println("Perf-annotated Hotspot log is saved to " + target);
++            } catch (IOException e) {
++                pw.println("Unable to save Hotspot log to " + target);
++            }
++        }
++
++        pw.flush();
++        pw.close();
++
++        return new PerfResult(sw.toString());
++    }
++
++    private static void printLine(PrintWriter pw, PerfEvents events, String event, long count) {
++        if (count > 0) {
++            pw.printf("%6.2f%%  ", 100.0 * count / events.getTotalEvents(event));
++        } else {
++            pw.printf("%9s", "");
++        }
++    }
++
++    void printDottedLine(PrintWriter pw) {
++        printDottedLine(pw, null);
++    }
++
++    void printDottedLine(PrintWriter pw, String header) {
++        final int HEADER_WIDTH = 100;
++
++        pw.print("....");
++        if (header != null) {
++            header = "[" + header + "]";
++            pw.print(header);
++        } else {
++            header = "";
++        }
++
++        for (int c = 0; c < HEADER_WIDTH - 4 - header.length(); c++) {
++            pw.print(".");
++        }
++        pw.println();
++    }
++
++    List<Region> makeRegions(Assembly asms, PerfEvents events) {
++        List<Region> regions = new ArrayList<Region>();
++
++        SortedSet<Long> addrs = events.getAllAddresses();
++
++        Set<Long> eventfulAddrs = new HashSet<Long>();
++        Long lastBegin = null;
++        Long lastAddr = null;
++        for (Long addr : addrs) {
++            if (addr == 0) {
++                regions.add(new KernelRegion());
++                continue;
++            }
++
++            if (lastAddr == null) {
++                lastAddr = addr;
++                lastBegin = addr;
++            } else {
++                if (addr - lastAddr > MERGE_MARGIN) {
++                    List<ASMLine> regionLines = asms.getLines(lastBegin, lastAddr, PRINT_MARGIN);
++                    if (!regionLines.isEmpty()) {
++                        regions.add(new GeneratedRegion(asms, lastBegin, lastAddr, regionLines, eventfulAddrs));
++                    } else {
++                        regions.add(new NativeRegion(events, lastBegin, lastAddr, eventfulAddrs));
++                    }
++
++                    lastBegin = addr;
++                    eventfulAddrs = new HashSet<Long>();
++                }
++                lastAddr = addr;
++            }
++            eventfulAddrs.add(addr);
++        }
++
++        return regions;
++    }
++
++    Collection<Collection<String>> splitAssembly(File stdOut) {
++        FileReader in = null;
++        try {
++            Multimap<Long, String> writerToLines = new HashMultimap<Long, String>();
++            Long writerId = -1L;
++
++            Pattern pWriterThread = Pattern.compile("(.*)<writer thread='(.*)'>(.*)");
++            String line;
++
++            in = new FileReader(stdOut);
++            BufferedReader br = new BufferedReader(in);
++            while ((line = br.readLine()) != null) {
++                // Parse the writer threads IDs:
++                //    <writer thread='140703710570240'/>
++                if (line.contains("<writer thread=")) {
++                    Matcher m = pWriterThread.matcher(line);
++                    if (m.matches()) {
++                        try {
++                            writerId = Long.valueOf(m.group(2));
++                        } catch (NumberFormatException e) {
++                            // something is wrong, try to recover
++                        }
++                    }
++                    continue;
++                }
++                writerToLines.put(writerId, line);
++            }
++
++            Collection<Collection<String>> r = new ArrayList<Collection<String>>();
++            for (long id : writerToLines.keys()) {
++                r.add(writerToLines.get(id));
++            }
++            return r;
++        } catch (IOException e) {
++            return Collections.emptyList();
++        } finally {
++            FileUtils.safelyClose(in);
++        }
++    }
++
++    Assembly readAssembly(File stdOut) {
++        List<ASMLine> lines = new ArrayList<ASMLine>();
++        SortedMap<Long, Integer> addressMap = new TreeMap<Long, Integer>();
++        SortedMap<Long, String> methodMap = new TreeMap<Long, String>();
++
++        for (Collection<String> cs : splitAssembly(stdOut)) {
++            String method = null;
++            String prevLine = "";
++            for (String line : cs) {
++                String trim = line.trim();
++
++                if (trim.isEmpty()) continue;
++                String[] elements = trim.split(" ");
++
++                ASMLine asmLine = new ASMLine(line);
++
++                // Handle the most frequent case first.
++                if (elements.length >= 1 && elements[0].startsWith("0x")) {
++                    // Seems to be line with address.
++                    try {
++                        Long addr = Long.valueOf(elements[0].replace("0x", "").replace(":", ""), 16);
++                        int idx = lines.size();
++                        addressMap.put(addr, idx);
++
++                        // Record the starting address for the method, if any.
++                        if (method != null) {
++                            methodMap.put(addr, method);
++                            method = null;
++                        }
++
++                        asmLine = new ASMLine(addr, line);
++                    } catch (NumberFormatException e) {
++                        // Nope, not the address line.
++                    }
++                } else if (line.contains("# {method}")) {
++                    // Handle the compiled code line.
++                    if (elements.length == 6) {
++                        // old JDKs may print the line with 6 fields: # {method} <name> <signature> in <class>
++                        method = (elements[5].replace("/", ".") + "::" + elements[2]).replace("'", "");
++                    } else if (elements.length == 7) {
++                        // newer JDKs always print 7 fields: # {method} <address> <name> <signature> in <class>
++                        method = (elements[6].replace("/", ".") + "::" + elements[3]).replace("'", "");
++                    } else {
++                        // {method} line is corrupted, other writer had possibly interjected;
++                        // honestly say we can't figure the method name out instead of lying.
++                        method = "<name unparseable>";
++                    }
++                    method = method.replace("&apos;", "");
++                    method = method.replace("&lt;", "<");
++                    method = method.replace("&gt;", ">");
++                } else if (prevLine.contains("--------")) {
++                    if (line.trim().endsWith("bytes")) {
++                        // Handle the VM stub/interpreter line.
++                        method = "<stub: " + line.substring(0, line.indexOf("[")).trim() + ">";
++                    }
++                }
++                lines.add(asmLine);
++
++                prevLine = line;
++            }
++        }
++        return new Assembly(lines, addressMap, methodMap);
++    }
++
++    static class PerfResult extends Result<PerfResult> {
++        private static final long serialVersionUID = 6871141606856800453L;
++
++        private final String output;
++
++        public PerfResult(String output) {
++            super(ResultRole.SECONDARY, "@asm", of(Double.NaN), "---", AggregationPolicy.AVG);
++            this.output = output;
++        }
++
++        @Override
++        protected Aggregator<PerfResult> getThreadAggregator() {
++            return new PerfResultAggregator();
++        }
++
++        @Override
++        protected Aggregator<PerfResult> getIterationAggregator() {
++            return new PerfResultAggregator();
++        }
++
++        @Override
++        public String toString() {
++            return "(text only)";
++        }
++
++        @Override
++        public String extendedInfo(String label) {
++            return output;
++        }
++    }
++
++    static class PerfResultAggregator implements Aggregator<PerfResult> {
++        @Override
++        public PerfResult aggregate(Collection<PerfResult> results) {
++            String output = "";
++            for (PerfResult r : results) {
++                output += r.output;
++            }
++            return new PerfResult(output);
++        }
++    }
++
++    protected static class PerfEvents {
++        final Map<String, Multiset<Long>> events;
++        final Map<Long, String> methods;
++        final Map<Long, String> libs;
++        final Map<String, Long> totalCounts;
++
++        PerfEvents(Map<String, Multiset<Long>> events, Map<Long, String> methods, Map<Long, String> libs) {
++            this.events = events;
++            this.methods = methods;
++            this.libs = libs;
++            this.totalCounts = new HashMap<String, Long>();
++            for (String event : EVENTS) {
++                totalCounts.put(event, events.get(event).size());
++            }
++        }
++
++        public PerfEvents() {
++            this(Collections.<String, Multiset<Long>>emptyMap(), Collections.<Long, String>emptyMap(), Collections.<Long, String>emptyMap());
++        }
++
++        public boolean isEmpty() {
++            return events.isEmpty();
++        }
++
++        public Multiset<Long> get(String event) {
++            return events.get(event);
++        }
++
++        public SortedSet<Long> getAllAddresses() {
++            SortedSet<Long> addrs = new TreeSet<Long>();
++            for (Multiset<Long> e : events.values()) {
++                addrs.addAll(e.keys());
++            }
++            return addrs;
++        }
++
++        public Long getTotalEvents(String event) {
++            return totalCounts.get(event);
++        }
++    }
++
++    static class Assembly {
++        final List<ASMLine> lines;
++        final SortedMap<Long, Integer> addressMap;
++        final SortedMap<Long, String> methodMap;
++
++        public Assembly(List<ASMLine> lines, SortedMap<Long, Integer> addressMap, SortedMap<Long, String> methodMap) {
++            this.lines = lines;
++            this.addressMap = addressMap;
++            this.methodMap = methodMap;
++        }
++
++        public Assembly() {
++            this(new ArrayList<ASMLine>(), new TreeMap<Long, Integer>(), new TreeMap<Long, String>());
++        }
++
++        public int size() {
++            // We only care about the address lines.
++            return addressMap.size();
++        }
++
++        public List<ASMLine> getLines(long begin, long end, int window) {
++            SortedMap<Long, Integer> tailMap = addressMap.tailMap(begin);
++
++            Long beginAddr;
++            Integer beginIdx;
++            if (!tailMap.isEmpty()) {
++                beginAddr = tailMap.firstKey();
++                beginIdx = addressMap.get(beginAddr);
++            } else {
++                return Collections.emptyList();
++            }
++
++            SortedMap<Long, Integer> headMap = addressMap.headMap(end);
++
++            Long endAddr;
++            Integer endIdx;
++            if (!headMap.isEmpty()) {
++                endAddr = headMap.lastKey();
++                endIdx = addressMap.get(endAddr);
++            } else {
++                return Collections.emptyList();
++            }
++
++            beginIdx = Math.max(0, beginIdx - window);
++            endIdx = Math.min(lines.size(), endIdx + 2 + window);
++
++            // Compensate for minute discrepancies
++            if (beginIdx < endIdx) {
++                return lines.subList(beginIdx, endIdx);
++            } else {
++                return Collections.emptyList();
++            }
++        }
++
++        public String getMethod(long addr) {
++            SortedMap<Long, String> head = methodMap.headMap(addr);
++            if (head.isEmpty()) {
++                return "<unresolved>";
++            } else {
++                return methodMap.get(head.lastKey());
++            }
++        }
++    }
++
++    static class ASMLine {
++        final Long addr;
++        final String code;
++
++        ASMLine(String code) {
++            this(null, code);
++        }
++
++        ASMLine(Long addr, String code) {
++            this.addr = addr;
++            this.code = code;
++        }
++    }
++
++    static class Region {
++        final String method;
++        final long begin;
++        final long end;
++        final Set<Long> eventfulAddrs;
++        final Map<String, Long> eventCountCache;
++
++        Region(String method, long begin, long end, Set<Long> eventfulAddrs) {
++            this.method = method;
++            this.begin = begin;
++            this.end = end;
++            this.eventfulAddrs = eventfulAddrs;
++            this.eventCountCache = new HashMap<String, Long>();
++        }
++
++        long getEventCount(PerfEvents events, String event) {
++            if (!eventCountCache.containsKey(event)) {
++                Multiset<Long> evs = events.get(event);
++                long count = 0;
++                for (Long addr : eventfulAddrs) {
++                    count += evs.count(addr);
++                }
++                eventCountCache.put(event, count);
++            }
++            return eventCountCache.get(event);
++        }
++
++        public void printCode(PrintWriter pw, PerfEvents events) {
++            pw.println("<no code>");
++        }
++
++        public String getName() {
++            return method;
++        }
++
++        public String getType() {
++            return "<unknown>";
++        }
++    }
++
++    static class GeneratedRegion extends Region {
++        final Collection<ASMLine> code;
++
++        GeneratedRegion(Assembly asms, long begin, long end, Collection<ASMLine> code, Set<Long> eventfulAddrs) {
++            super(generateName(asms, eventfulAddrs), begin, end, eventfulAddrs);
++            this.code = code;
++        }
++
++        static String generateName(Assembly asm, Set<Long> eventfulAddrs) {
++            Set<String> methods = new HashSet<String>();
++            for (Long ea : eventfulAddrs) {
++                String m = asm.getMethod(ea);
++                if (m != null) {
++                    methods.add(m);
++                }
++            }
++            return Utils.join(methods, "; ");
++        }
++
++        @Override
++        public void printCode(PrintWriter pw, PerfEvents events) {
++            if (code.size() > THRESHOLD_TOO_BIG) {
++                pw.printf(" <region is too big to display, has %d lines, but threshold is %d>%n", code.size(), THRESHOLD_TOO_BIG);
++            } else {
++                for (ASMLine line : code) {
++                    for (String event : EVENTS) {
++                        long count = (line.addr != null) ? events.get(event).count(line.addr) : 0;
++                        printLine(pw, events, event, count);
++                    }
++                    pw.println(line.code);
++                }
++            }
++        }
++
++        @Override
++        public String getType() {
++            return "<generated code>";
++        }
++    }
++
++    static class NativeRegion extends Region {
++        private final String lib;
++
++        NativeRegion(PerfEvents events, long begin, long end, Set<Long> eventfulAddrs) {
++            super(generateName(events, eventfulAddrs), begin, end, eventfulAddrs);
++            lib = resolveLib(events, eventfulAddrs);
++        }
++
++        static String generateName(PerfEvents events, Set<Long> eventfulAddrs) {
++            Set<String> methods = new HashSet<String>();
++            for (Long ea : eventfulAddrs) {
++                methods.add(events.methods.get(ea));
++            }
++            return Utils.join(methods, "; ");
++        }
++
++        static String resolveLib(PerfEvents events, Set<Long> eventfulAddrs) {
++            Set<String> libs = new HashSet<String>();
++            for (Long ea : eventfulAddrs) {
++                libs.add(events.libs.get(ea));
++            }
++            return Utils.join(libs, "; ");
++        }
++
++        @Override
++        public void printCode(PrintWriter pw, PerfEvents events) {
++            pw.println(" <no assembly is recorded, native region>");
++        }
++
++        @Override
++        public String getType() {
++            return "<native code in (" + lib + ")>";
++        }
++
++        @Override
++        public String getName() {
++            return method + " (" + lib + ")";
++        }
++    }
++
++    static class KernelRegion extends Region {
++        KernelRegion() {
++            super("<kernel>", 0L, 0L, Collections.singleton(0L));
++        }
++
++        @Override
++        public void printCode(PrintWriter pw, PerfEvents events) {
++            pw.println(" <no assembly is recorded, kernel region>");
++        }
++
++        @Override
++        public String getType() {
++            return "<kernel>";
++        }
++    }
++}
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/profile/LinuxPerfAsmProfiler.java
+--- a/jmh-core/src/main/java/org/openjdk/jmh/profile/LinuxPerfAsmProfiler.java	Fri Feb 06 11:11:10 2015 +0300
++++ b/jmh-core/src/main/java/org/openjdk/jmh/profile/LinuxPerfAsmProfiler.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -25,155 +25,40 @@
+ package org.openjdk.jmh.profile;
+ 
+ import org.openjdk.jmh.infra.BenchmarkParams;
+-import org.openjdk.jmh.results.AggregationPolicy;
+-import org.openjdk.jmh.results.Aggregator;
+-import org.openjdk.jmh.results.Result;
+-import org.openjdk.jmh.results.ResultRole;
+ import org.openjdk.jmh.util.Deduplicator;
+ import org.openjdk.jmh.util.FileUtils;
+-import org.openjdk.jmh.util.HashMultimap;
+-import org.openjdk.jmh.util.HashMultiset;
+ import org.openjdk.jmh.util.InputStreamDrainer;
+-import org.openjdk.jmh.util.Multimap;
+ import org.openjdk.jmh.util.Multiset;
+-import org.openjdk.jmh.util.Multisets;
+ import org.openjdk.jmh.util.TreeMultiset;
+ import org.openjdk.jmh.util.Utils;
+ 
+ import java.io.BufferedReader;
+-import java.io.File;
+ import java.io.FileOutputStream;
+ import java.io.FileReader;
+ import java.io.IOException;
+-import java.io.PrintWriter;
+-import java.io.StringWriter;
+-import java.util.ArrayList;
+ import java.util.Arrays;
+ import java.util.Collection;
+-import java.util.Collections;
+-import java.util.Comparator;
+ import java.util.HashMap;
+-import java.util.HashSet;
+ import java.util.LinkedHashMap;
+-import java.util.List;
+ import java.util.Map;
+-import java.util.Set;
+-import java.util.SortedMap;
+-import java.util.SortedSet;
+-import java.util.TreeMap;
+-import java.util.TreeSet;
+-import java.util.concurrent.TimeUnit;
+-import java.util.regex.Matcher;
+-import java.util.regex.Pattern;
+ 
+-public class LinuxPerfAsmProfiler extends LinuxPerfUtil implements ExternalProfiler {
+-
+-    /**
+-     * Events to gather *
+-     */
+-    private static final String[] EVENTS = System.getProperty("jmh.perfasm.events", "cycles,instructions").split(",");
+-
+-    /**
+-     * Cutoff threshold for hot region: the regions with event count over threshold would be shown
+-     */
+-    private static final double THRESHOLD_RATE = Double.valueOf(System.getProperty("jmh.perfasm.hotThreshold", "0.10"));
+-
+-    /**
+-     * Show this number of top hottest code regions
+-     */
+-    private static final int SHOW_TOP = Integer.getInteger("jmh.perfasm.top", 20);
+-
+-    /**
+-     * Cutoff threshold for large region: the region larger than this would be truncated
+-     */
+-    private static final int THRESHOLD_TOO_BIG = Integer.getInteger("jmh.perfasm.tooBigThreshold", 1000);
+-
+-    /**
+-     * Print margin: how many "context" lines without counters to show in each region
+-     */
+-    private static final int PRINT_MARGIN = Integer.getInteger("jmh.perfasm.printMargin", 10);
+-
+-    /**
+-     * Merge margin: the regions separated by less than the margin are considered the same
+-     */
+-    private static final int MERGE_MARGIN = Integer.getInteger("jmh.perfasm.mergeMargin", 32);
+-
+-    /**
+-     * Delay collection for given time; -1 to detect automatically
+-     */
+-    private static final int DELAY_MSEC = Integer.getInteger("jmh.perfasm.delayMs", -1);
+-
++public class LinuxPerfAsmProfiler extends AbstractPerfAsmProfiler {
+     /**
+      * Sampling frequency
+      */
+     private static final long SAMPLE_FREQUENCY = Long.getLong("jmh.perfasm.frequency", 1000);
+ 
+-    /**
+-     * Do -XX:+PrintAssembly instrumentation?
+-     */
+-    private static final Boolean SKIP_ASSEMBLY = Boolean.getBoolean("jmh.perfasm.skipAsm");
++    static {
++        EVENTS = System.getProperty("jmh.perfasm.events", "cycles,instructions").split(",");
+ 
+-    /**
+-     * Skip printing out interpreter stubs. This may improve the parser performance at the expense
+-     * of missing the resolution and disassembly of interpreter regions.
+-     */
+-    private static final Boolean SKIP_INTERPRETER = Boolean.getBoolean("jmh.perfasm.skipInterpreter");
++        Collection<String> errs = LinuxPerfUtil.FAIL_MSGS;
+ 
+-    /**
+-     * Skip printing out VM stubs. This may improve the parser performance at the expense
+-     * of missing the resolution and disassembly of VM stub regions.
+-     */
+-    private static final Boolean SKIP_VM_STUBS = Boolean.getBoolean("jmh.perfasm.skipVMStubs");
+-
+-    /**
+-     * Save perf output to file?
+-     */
+-    private static final Boolean SAVE_PERF_OUTPUT = Boolean.getBoolean("jmh.perfasm.savePerf");
+-
+-    /**
+-     * Override the perf output location
+-     */
+-    private static final String SAVE_PERF_OUTPUT_TO = System.getProperty("jmh.perfasm.savePerfTo", ".");
+-
+-    /**
+-     * Override the perf output filename
+-     */
+-    private static final String SAVE_PERF_OUTPUT_TO_FILE = System.getProperty("jmh.perfasm.savePerfToFile");
+-
+-    /**
+-     * Save annotated Hotspot log to file
+-     */
+-    private static final Boolean SAVE_LOG_OUTPUT = Boolean.getBoolean("jmh.perfasm.saveLog");
+-
+-    /**
+-     * Override the annotated Hotspot log location
+-     */
+-    private static final String SAVE_LOG_OUTPUT_TO = System.getProperty("jmh.perfasm.saveLogTo", ".");
+-
+-    /**
+-     * Override the annotated Hotspot log filename
+-     */
+-    private static final String SAVE_LOG_OUTPUT_TO_FILE = System.getProperty("jmh.perfasm.saveLogToFile");
+-
+-    /**
+-     * Print the collateral compilation information.
+-     * Enabling this might corrupt the assembly output, see https://bugs.openjdk.java.net/browse/CODETOOLS-7901102
+-     */
+-    private static final Boolean PRINT_COMPILATION_INFO = Boolean.getBoolean("jmh.perfasm.printCompilationInfo");
+-
+-    /**
+-     * Override the default assembly syntax
+-     */
+-    private static final String ASSEMBLY_SYNTAX = System.getProperty("jmh.perfasm.assemblySyntax");
+-
+-    private String hsLog;
+-    private String perfBinData;
+-    private String perfParsedData;
++        if (errs != null && !errs.isEmpty())
++            FAIL_MSGS.addAll(errs);
++    }
+ 
+     public LinuxPerfAsmProfiler() throws IOException {
+-        hsLog = FileUtils.tempFile("hslog").getAbsolutePath();
+-        perfBinData = FileUtils.tempFile("perfbin").getAbsolutePath();
+-        perfParsedData = FileUtils.tempFile("perfparsed").getAbsolutePath();
++        super();
+     }
+ 
+     @Override
+@@ -182,71 +67,11 @@
+     }
+ 
+     @Override
+-    public Collection<String> addJVMOptions(BenchmarkParams params) {
+-        if (!SKIP_ASSEMBLY) {
+-            Collection<String> opts = new ArrayList<String>();
+-            opts.addAll(Arrays.asList(
+-                    "-XX:+UnlockDiagnosticVMOptions",
+-                    "-XX:+LogCompilation",
+-                    "-XX:LogFile=" + hsLog,
+-                    "-XX:+PrintAssembly"));
+-
+-            if (!SKIP_INTERPRETER) {
+-                opts.add("-XX:+PrintInterpreter");
+-            }
+-            if (!SKIP_VM_STUBS) {
+-                opts.add("-XX:+PrintNMethods");
+-                opts.add("-XX:+PrintNativeNMethods");
+-                opts.add("-XX:+PrintSignatureHandlers");
+-                opts.add("-XX:+PrintAdapterHandlers");
+-                opts.add("-XX:+PrintStubCode");
+-            }
+-            if (PRINT_COMPILATION_INFO) {
+-                opts.add("-XX:+PrintCompilation");
+-                opts.add("-XX:+PrintInlining");
+-                opts.add("-XX:+TraceClassLoading");
+-            }
+-            if (ASSEMBLY_SYNTAX != null) {
+-                opts.add("-XX:PrintAssemblyOptions=" + ASSEMBLY_SYNTAX);
+-            }
+-            return opts;
+-        } else {
+-            return Collections.emptyList();
+-        }
+-    }
+-
+-    @Override
+     public void beforeTrial(BenchmarkParams params) {
+         // do nothing
+     }
+ 
+     @Override
+-    public Collection<? extends Result> afterTrial(BenchmarkParams params, File stdOut, File stdErr) {
+-        PerfResult result = processAssembly(params, stdOut, stdErr);
+-        return Collections.singleton(result);
+-    }
+-
+-    @Override
+-    public boolean allowPrintOut() {
+-        return false;
+-    }
+-
+-    @Override
+-    public boolean allowPrintErr() {
+-        return false;
+-    }
+-
+-    @Override
+-    public boolean checkSupport(List<String> msgs) {
+-        if (IS_SUPPORTED) {
+-            return true;
+-        } else {
+-            msgs.addAll(FAIL_MSGS);
+-            return false;
+-        }
+-    }
+-
+-    @Override
+     public String label() {
+         return "perfasm";
+     }
+@@ -256,11 +81,8 @@
+         return "Linux perf + PrintAssembly Profiler";
+     }
+ 
+-    private PerfResult processAssembly(BenchmarkParams params, File stdOut, File stdErr) {
+-        /*
+-         * 1. Call perf to produce the machine-readable data.
+-         */
+-
++    @Override
++    protected void parseEvents() {
+         try {
+             Process p = Runtime.getRuntime().exec("perf script -f time,event,ip,sym,dso -i " + perfBinData);
+ 
+@@ -284,477 +106,10 @@
+         } catch (InterruptedException ex) {
+             throw new IllegalStateException(ex);
+         }
+-
+-        StringWriter sw = new StringWriter();
+-        PrintWriter pw = new PrintWriter(sw);
+-
+-        /**
+-         * 2. Read out PrintAssembly output
+-         */
+-
+-        Assembly assembly = readAssembly(new File(hsLog));
+-        if (assembly.size() > 0) {
+-            pw.printf("PrintAssembly processed: %d total address lines.%n", assembly.size());
+-        } else if (SKIP_ASSEMBLY) {
+-            pw.println();
+-            pw.println("PrintAssembly skipped, Java methods are not resolved.");
+-            pw.println();
+-        } else {
+-            pw.println();
+-            pw.println("ERROR: No address lines detected in assembly capture, make sure your JDK is PrintAssembly-enabled:\n    https://wikis.oracle.com/display/HotSpotInternals/PrintAssembly");
+-            pw.println();
+-        }
+-
+-        /**
+-         * 3. Read out perf output
+-         */
+-
+-        long delayNs;
+-        if (DELAY_MSEC == -1) { // not set
+-            delayNs = params.getWarmup().getCount() *
+-                    params.getWarmup().getTime().convertTo(TimeUnit.NANOSECONDS)
+-                    + TimeUnit.SECONDS.toNanos(1); // loosely account for the JVM lag
+-        } else {
+-            delayNs = TimeUnit.MILLISECONDS.toNanos(DELAY_MSEC);
+-        }
+-
+-        double skipSec = 1.0 * delayNs / TimeUnit.SECONDS.toNanos(1);
+-
+-        final PerfEvents events = readEvents(skipSec);
+-
+-        if (!events.isEmpty()) {
+-            pw.printf("Perf output processed (skipped %.3f seconds):%n", skipSec);
+-            int cnt = 1;
+-            for (String event : EVENTS) {
+-                pw.printf(" Column %d: %s (%d events)%n", cnt, event, events.get(event).size());
+-                cnt++;
+-            }
+-            pw.println();
+-        } else {
+-            pw.println();
+-            pw.println("ERROR: No perf data, make sure \"perf stat echo 1\" is indeed working;\n " +
+-                    "or the collection delay is not running past the benchmark time.");
+-            pw.println();
+-        }
+-
+-        /**
+-         * 4. Figure out code regions
+-         */
+-
+-        final List<Region> regions = makeRegions(assembly, events);
+-
+-        /**
+-         * 5. Figure out interesting regions, and print them out.
+-         * We would sort the regions by the hotness of the first (main) event type.
+-         */
+-
+-        final String mainEvent = EVENTS[0];
+-
+-        Collections.sort(regions, new Comparator<Region>() {
+-            @Override
+-            public int compare(Region o1, Region o2) {
+-                return Long.valueOf(o2.getEventCount(events, mainEvent)).
+-                        compareTo(o1.getEventCount(events, mainEvent));
+-            }
+-        });
+-
+-        long threshold = (long) (THRESHOLD_RATE * events.getTotalEvents(mainEvent));
+-
+-        boolean headerPrinted = false;
+-
+-        int cnt = 1;
+-        for (Region r : regions) {
+-            if (r.getEventCount(events, mainEvent) > threshold) {
+-                if (!headerPrinted) {
+-                    pw.printf("Hottest code regions (>%.2f%% \"%s\" events):%n", THRESHOLD_RATE * 100, mainEvent);
+-                    headerPrinted = true;
+-                }
+-
+-                printDottedLine(pw, "Hottest Region " + cnt);
+-                pw.printf(" [0x%x:0x%x] in %s%n%n", r.begin, r.end, r.getName());
+-                r.printCode(pw, events);
+-
+-                printDottedLine(pw);
+-                for (String event : EVENTS) {
+-                    printLine(pw, events, event, r.getEventCount(events, event));
+-                }
+-                pw.println("<total for region " + cnt + ">");
+-                pw.println();
+-                cnt++;
+-            }
+-        }
+-
+-        /**
+-         * 6. Print out the hottest regions
+-         */
+-        {
+-            Multiset<String> total = new HashMultiset<String>();
+-            Multiset<String> other = new HashMultiset<String>();
+-
+-            printDottedLine(pw, "Hottest Regions");
+-            int shown = 0;
+-            for (Region r : regions) {
+-                if (shown++ < SHOW_TOP) {
+-                    for (String event : EVENTS) {
+-                        printLine(pw, events, event, r.getEventCount(events, event));
+-                    }
+-                    pw.printf("[0x%x:0x%x] in %s%n", r.begin, r.end, r.getName());
+-                } else {
+-                    for (String event : EVENTS) {
+-                        other.add(event, r.getEventCount(events, event));
+-                    }
+-                }
+-                for (String event : EVENTS) {
+-                    total.add(event, r.getEventCount(events, event));
+-                }
+-            }
+-
+-            if (regions.size() - SHOW_TOP > 0) {
+-                for (String event : EVENTS) {
+-                    printLine(pw, events, event, other.count(event));
+-                }
+-                pw.println("<...other " + (regions.size() - SHOW_TOP) + " warm regions...>");
+-            }
+-            printDottedLine(pw);
+-
+-            for (String event : EVENTS) {
+-                printLine(pw, events, event, total.count(event));
+-            }
+-            pw.println("<totals>");
+-            pw.println();
+-        }
+-
+-        final Map<String, Multiset<String>> methodsByType = new HashMap<String, Multiset<String>>();
+-        for (String event : EVENTS) {
+-            methodsByType.put(event, new HashMultiset<String>());
+-        }
+-
+-        /**
+-         * Print out hottest methods
+-         */
+-        {
+-            printDottedLine(pw, "Hottest Methods (after inlining)");
+-
+-            Map<String, Multiset<String>> methods = new HashMap<String, Multiset<String>>();
+-            for (String event : EVENTS) {
+-                methods.put(event, new HashMultiset<String>());
+-            }
+-
+-            for (Region r : regions) {
+-                for (String event : EVENTS) {
+-                    long count = r.getEventCount(events, event);
+-                    methods.get(event).add(r.getName(), count);
+-                    methodsByType.get(event).add(r.getType(), count);
+-                }
+-            }
+-
+-            Multiset<String> total = new HashMultiset<String>();
+-            Multiset<String> other = new HashMultiset<String>();
+-
+-            int shownMethods = 0;
+-            List<String> top = Multisets.sortedDesc(methods.get(mainEvent));
+-            for (String m : top) {
+-                if (shownMethods++ < SHOW_TOP) {
+-                    for (String event : EVENTS) {
+-                        printLine(pw, events, event, methods.get(event).count(m));
+-                    }
+-                    pw.printf("%s%n", m);
+-                } else {
+-                    for (String event : EVENTS) {
+-                        other.add(event, methods.get(event).count(m));
+-                    }
+-                }
+-                for (String event : EVENTS) {
+-                    total.add(event, methods.get(event).count(m));
+-                }
+-            }
+-
+-            if (top.size() - SHOW_TOP > 0) {
+-                for (String event : EVENTS) {
+-                    printLine(pw, events, event, other.count(event));
+-                }
+-                pw.println("<...other " + (top.size() - SHOW_TOP) + " warm methods...>");
+-            }
+-            printDottedLine(pw);
+-
+-            for (String event : EVENTS) {
+-                printLine(pw, events, event, total.count(event));
+-            }
+-            pw.println("<totals>");
+-            pw.println();
+-        }
+-
+-        /**
+-         * Print hot methods distribution
+-         */
+-        {
+-            printDottedLine(pw, "Distribution by Area");
+-
+-            for (String m : Multisets.sortedDesc(methodsByType.get(mainEvent))) {
+-                for (String event : EVENTS) {
+-                    printLine(pw, events, event, methodsByType.get(event).count(m));
+-                }
+-                pw.printf("%s%n", m);
+-            }
+-
+-            printDottedLine(pw);
+-
+-            for (String event : EVENTS) {
+-                printLine(pw, events, event, methodsByType.get(event).size());
+-            }
+-
+-            pw.println("<totals>");
+-            pw.println();
+-
+-        }
+-
+-        /**
+-         * Final checks on assembly:
+-         */
+-
+-        {
+-            Set<Long> addrHistory = new HashSet<Long>();
+-            for (Long addr : assembly.addressMap.keySet()) {
+-                if (!addrHistory.add(addr)) {
+-                    pw.println("WARNING: Duplicate instruction addresses detected. This is probably due to compiler reusing\n " +
+-                            "the code arena for the new generated code. We can not differentiate between methods sharing\n" +
+-                            "the same addresses, and therefore the profile might be wrong. Increasing generated code\n" +
+-                            "storage might help.");
+-                }
+-            }
+-        }
+-
+-        {
+-            int sum = 0;
+-            for (Long v : events.totalCounts.values()) {
+-                sum += v;
+-            }
+-
+-            if (sum < 1000) {
+-                pw.println("WARNING: The perf event count is suspiciously low (" + sum + "). The performance data might be\n" +
+-                        "inaccurate or misleading. Try to do the profiling again, or tune up the sampling frequency.");
+-            }
+-        }
+-
+-        /**
+-         * Print perf output, if needed:
+-         */
+-        if (SAVE_PERF_OUTPUT) {
+-            String target = (SAVE_PERF_OUTPUT_TO_FILE == null) ?
+-                    SAVE_PERF_OUTPUT_TO + "/" + params.id() + ".perf" :
+-                    SAVE_PERF_OUTPUT_TO_FILE;
+-            try {
+-                FileUtils.copy(perfParsedData, target);
+-                pw.println("Perf output saved to " + target);
+-            } catch (IOException e) {
+-                pw.println("Unable to save perf output to " + target);
+-            }
+-        }
+-
+-        /**
+-         * Print annotated assembly, if needed:
+-         */
+-        if (SAVE_LOG_OUTPUT) {
+-            String target = (SAVE_LOG_OUTPUT_TO_FILE == null) ?
+-                    SAVE_LOG_OUTPUT_TO + "/" + params.id() + ".log" :
+-                    SAVE_LOG_OUTPUT_TO_FILE;
+-            FileOutputStream asm;
+-            try {
+-                asm = new FileOutputStream(target);
+-                PrintWriter pwAsm = new PrintWriter(asm);
+-                for (ASMLine line : assembly.lines) {
+-                    for (String event : EVENTS) {
+-                        long count = (line.addr != null) ? events.get(event).count(line.addr) : 0;
+-                        printLine(pwAsm, events, event, count);
+-                    }
+-                    pwAsm.println(line.code);
+-                }
+-                pwAsm.flush();
+-                FileUtils.safelyClose(asm);
+-
+-                pw.println("Perf-annotated Hotspot log is saved to " + target);
+-            } catch (IOException e) {
+-                pw.println("Unable to save Hotspot log to " + target);
+-            }
+-        }
+-
+-        pw.flush();
+-        pw.close();
+-
+-        return new PerfResult(sw.toString());
+     }
+ 
+-    static void printLine(PrintWriter pw, PerfEvents events, String event, long count) {
+-        if (count > 0) {
+-            pw.printf("%6.2f%%  ", 100.0 * count / events.getTotalEvents(event));
+-        } else {
+-            pw.printf("%9s", "");
+-        }
+-    }
+-
+-    void printDottedLine(PrintWriter pw) {
+-        printDottedLine(pw, null);
+-    }
+-
+-    void printDottedLine(PrintWriter pw, String header) {
+-        final int HEADER_WIDTH = 100;
+-
+-        pw.print("....");
+-        if (header != null) {
+-            header = "[" + header + "]";
+-            pw.print(header);
+-        } else {
+-            header = "";
+-        }
+-
+-        for (int c = 0; c < HEADER_WIDTH - 4 - header.length(); c++) {
+-            pw.print(".");
+-        }
+-        pw.println();
+-    }
+-
+-    List<Region> makeRegions(Assembly asms, PerfEvents events) {
+-        List<Region> regions = new ArrayList<Region>();
+-
+-        SortedSet<Long> addrs = events.getAllAddresses();
+-
+-        Set<Long> eventfulAddrs = new HashSet<Long>();
+-        Long lastBegin = null;
+-        Long lastAddr = null;
+-        for (Long addr : addrs) {
+-            if (addr == 0) {
+-                regions.add(new KernelRegion());
+-                continue;
+-            }
+-
+-            if (lastAddr == null) {
+-                lastAddr = addr;
+-                lastBegin = addr;
+-            } else {
+-                if (addr - lastAddr > MERGE_MARGIN) {
+-                    List<ASMLine> regionLines = asms.getLines(lastBegin, lastAddr, PRINT_MARGIN);
+-                    if (!regionLines.isEmpty()) {
+-                        regions.add(new GeneratedRegion(asms, lastBegin, lastAddr, regionLines, eventfulAddrs));
+-                    } else {
+-                        regions.add(new NativeRegion(events, lastBegin, lastAddr, eventfulAddrs));
+-                    }
+-
+-                    lastBegin = addr;
+-                    eventfulAddrs = new HashSet<Long>();
+-                }
+-                lastAddr = addr;
+-            }
+-            eventfulAddrs.add(addr);
+-        }
+-
+-        return regions;
+-    }
+-
+-    Collection<Collection<String>> splitAssembly(File stdOut) {
+-        FileReader in = null;
+-        try {
+-            Multimap<Long, String> writerToLines = new HashMultimap<Long, String>();
+-            Long writerId = -1L;
+-
+-            Pattern pWriterThread = Pattern.compile("(.*)<writer thread='(.*)'>(.*)");
+-            String line;
+-
+-            in = new FileReader(stdOut);
+-            BufferedReader br = new BufferedReader(in);
+-            while ((line = br.readLine()) != null) {
+-                // Parse the writer threads IDs:
+-                //    <writer thread='140703710570240'/>
+-                if (line.contains("<writer thread=")) {
+-                    Matcher m = pWriterThread.matcher(line);
+-                    if (m.matches()) {
+-                        try {
+-                            writerId = Long.valueOf(m.group(2));
+-                        } catch (NumberFormatException e) {
+-                            // something is wrong, try to recover
+-                        }
+-                    }
+-                    continue;
+-                }
+-                writerToLines.put(writerId, line);
+-            }
+-
+-            Collection<Collection<String>> r = new ArrayList<Collection<String>>();
+-            for (long id : writerToLines.keys()) {
+-                r.add(writerToLines.get(id));
+-            }
+-            return r;
+-        } catch (IOException e) {
+-            return Collections.emptyList();
+-        } finally {
+-            FileUtils.safelyClose(in);
+-        }
+-    }
+-
+-    Assembly readAssembly(File stdOut) {
+-        List<ASMLine> lines = new ArrayList<ASMLine>();
+-        SortedMap<Long, Integer> addressMap = new TreeMap<Long, Integer>();
+-        SortedMap<Long, String> methodMap = new TreeMap<Long, String>();
+-
+-        for (Collection<String> cs : splitAssembly(stdOut)) {
+-            String method = null;
+-            String prevLine = "";
+-            for (String line : cs) {
+-                String trim = line.trim();
+-
+-                if (trim.isEmpty()) continue;
+-                String[] elements = trim.split(" ");
+-
+-                ASMLine asmLine = new ASMLine(line);
+-
+-                // Handle the most frequent case first.
+-                if (elements.length >= 1 && elements[0].startsWith("0x")) {
+-                    // Seems to be line with address.
+-                    try {
+-                        Long addr = Long.valueOf(elements[0].replace("0x", "").replace(":", ""), 16);
+-                        int idx = lines.size();
+-                        addressMap.put(addr, idx);
+-
+-                        // Record the starting address for the method, if any.
+-                        if (method != null) {
+-                            methodMap.put(addr, method);
+-                            method = null;
+-                        }
+-
+-                        asmLine = new ASMLine(addr, line);
+-                    } catch (NumberFormatException e) {
+-                        // Nope, not the address line.
+-                    }
+-                } else if (line.contains("# {method}")) {
+-                    // Handle the compiled code line.
+-                    if (elements.length == 6) {
+-                        // old JDKs may print the line with 6 fields: # {method} <name> <signature> in <class>
+-                        method = (elements[5].replace("/", ".") + "::" + elements[2]).replace("'", "");
+-                    } else if (elements.length == 7) {
+-                        // newer JDKs always print 7 fields: # {method} <address> <name> <signature> in <class>
+-                        method = (elements[6].replace("/", ".") + "::" + elements[3]).replace("'", "");
+-                    } else {
+-                        // {method} line is corrupted, other writer had possibly interjected;
+-                        // honestly say we can't figure the method name out instead of lying.
+-                        method = "<name unparseable>";
+-                    }
+-                    method = method.replace("&apos;", "");
+-                    method = method.replace("&lt;", "<");
+-                    method = method.replace("&gt;", ">");
+-                } else if (prevLine.contains("--------")) {
+-                    if (line.trim().endsWith("bytes")) {
+-                        // Handle the VM stub/interpreter line.
+-                        method = "<stub: " + line.substring(0, line.indexOf("[")).trim() + ">";
+-                    }
+-                }
+-                lines.add(asmLine);
+-
+-                prevLine = line;
+-            }
+-        }
+-        return new Assembly(lines, addressMap, methodMap);
+-    }
+-
+-    PerfEvents readEvents(double skipSec) {
++    @Override
++    protected PerfEvents readEvents(double skipSec) {
+         FileReader fr = null;
+         try {
+             Deduplicator<String> dedup = new Deduplicator<String>();
+@@ -836,301 +191,8 @@
+         }
+     }
+ 
+-    static class PerfResult extends Result<PerfResult> {
+-        private static final long serialVersionUID = 6871141606856800453L;
+-
+-        private final String output;
+-
+-        public PerfResult(String output) {
+-            super(ResultRole.SECONDARY, "@asm", of(Double.NaN), "---", AggregationPolicy.AVG);
+-            this.output = output;
+-        }
+-
+-        @Override
+-        protected Aggregator<PerfResult> getThreadAggregator() {
+-            return new PerfResultAggregator();
+-        }
+-
+-        @Override
+-        protected Aggregator<PerfResult> getIterationAggregator() {
+-            return new PerfResultAggregator();
+-        }
+-
+-        @Override
+-        public String toString() {
+-            return "(text only)";
+-        }
+-
+-        @Override
+-        public String extendedInfo(String label) {
+-            return output;
+-        }
++    @Override
++    protected String perfBinaryExtension() {
++        return ".perfbin";
+     }
+-
+-    static class PerfResultAggregator implements Aggregator<PerfResult> {
+-        @Override
+-        public PerfResult aggregate(Collection<PerfResult> results) {
+-            String output = "";
+-            for (PerfResult r : results) {
+-                output += r.output;
+-            }
+-            return new PerfResult(output);
+-        }
+-    }
+-
+-    static class PerfEvents {
+-        final Map<String, Multiset<Long>> events;
+-        final Map<Long, String> methods;
+-        final Map<Long, String> libs;
+-        final Map<String, Long> totalCounts;
+-
+-        PerfEvents(Map<String, Multiset<Long>> events, Map<Long, String> methods, Map<Long, String> libs) {
+-            this.events = events;
+-            this.methods = methods;
+-            this.libs = libs;
+-            this.totalCounts = new HashMap<String, Long>();
+-            for (String event : EVENTS) {
+-                totalCounts.put(event, events.get(event).size());
+-            }
+-        }
+-
+-        public PerfEvents() {
+-            this(Collections.<String, Multiset<Long>>emptyMap(), Collections.<Long, String>emptyMap(), Collections.<Long, String>emptyMap());
+-        }
+-
+-        public boolean isEmpty() {
+-            return events.isEmpty();
+-        }
+-
+-        public Multiset<Long> get(String event) {
+-            return events.get(event);
+-        }
+-
+-        public SortedSet<Long> getAllAddresses() {
+-            SortedSet<Long> addrs = new TreeSet<Long>();
+-            for (Multiset<Long> e : events.values()) {
+-                addrs.addAll(e.keys());
+-            }
+-            return addrs;
+-        }
+-
+-        public Long getTotalEvents(String event) {
+-            return totalCounts.get(event);
+-        }
+-    }
+-
+-    static class Assembly {
+-        final List<ASMLine> lines;
+-        final SortedMap<Long, Integer> addressMap;
+-        final SortedMap<Long, String> methodMap;
+-
+-        public Assembly(List<ASMLine> lines, SortedMap<Long, Integer> addressMap, SortedMap<Long, String> methodMap) {
+-            this.lines = lines;
+-            this.addressMap = addressMap;
+-            this.methodMap = methodMap;
+-        }
+-
+-        public Assembly() {
+-            this(new ArrayList<ASMLine>(), new TreeMap<Long, Integer>(), new TreeMap<Long, String>());
+-        }
+-
+-        public int size() {
+-            // We only care about the address lines.
+-            return addressMap.size();
+-        }
+-
+-        public List<ASMLine> getLines(long begin, long end, int window) {
+-            SortedMap<Long, Integer> tailMap = addressMap.tailMap(begin);
+-
+-            Long beginAddr;
+-            Integer beginIdx;
+-            if (!tailMap.isEmpty()) {
+-                beginAddr = tailMap.firstKey();
+-                beginIdx = addressMap.get(beginAddr);
+-            } else {
+-                return Collections.emptyList();
+-            }
+-
+-            SortedMap<Long, Integer> headMap = addressMap.headMap(end);
+-
+-            Long endAddr;
+-            Integer endIdx;
+-            if (!headMap.isEmpty()) {
+-                endAddr = headMap.lastKey();
+-                endIdx = addressMap.get(endAddr);
+-            } else {
+-                return Collections.emptyList();
+-            }
+-
+-            beginIdx = Math.max(0, beginIdx - window);
+-            endIdx = Math.min(lines.size(), endIdx + 2 + window);
+-
+-            // Compensate for minute discrepancies
+-            if (beginIdx < endIdx) {
+-                return lines.subList(beginIdx, endIdx);
+-            } else {
+-                return Collections.emptyList();
+-            }
+-        }
+-
+-        public String getMethod(long addr) {
+-            SortedMap<Long, String> head = methodMap.headMap(addr);
+-            if (head.isEmpty()) {
+-                return "<unresolved>";
+-            } else {
+-                return methodMap.get(head.lastKey());
+-            }
+-        }
+-    }
+-
+-    static class ASMLine {
+-        final Long addr;
+-        final String code;
+-
+-        ASMLine(String code) {
+-            this(null, code);
+-        }
+-
+-        ASMLine(Long addr, String code) {
+-            this.addr = addr;
+-            this.code = code;
+-        }
+-    }
+-
+-    static class Region {
+-        final String method;
+-        final long begin;
+-        final long end;
+-        final Set<Long> eventfulAddrs;
+-        final Map<String, Long> eventCountCache;
+-
+-        Region(String method, long begin, long end, Set<Long> eventfulAddrs) {
+-            this.method = method;
+-            this.begin = begin;
+-            this.end = end;
+-            this.eventfulAddrs = eventfulAddrs;
+-            this.eventCountCache = new HashMap<String, Long>();
+-        }
+-
+-        long getEventCount(PerfEvents events, String event) {
+-            if (!eventCountCache.containsKey(event)) {
+-                Multiset<Long> evs = events.get(event);
+-                long count = 0;
+-                for (Long addr : eventfulAddrs) {
+-                    count += evs.count(addr);
+-                }
+-                eventCountCache.put(event, count);
+-            }
+-            return eventCountCache.get(event);
+-        }
+-
+-        public void printCode(PrintWriter pw, PerfEvents events) {
+-            pw.println("<no code>");
+-        }
+-
+-        public String getName() {
+-            return method;
+-        }
+-
+-        public String getType() {
+-            return "<unknown>";
+-        }
+-    }
+-
+-    static class GeneratedRegion extends Region {
+-        final Collection<ASMLine> code;
+-
+-        GeneratedRegion(Assembly asms, long begin, long end, Collection<ASMLine> code, Set<Long> eventfulAddrs) {
+-            super(generateName(asms, eventfulAddrs), begin, end, eventfulAddrs);
+-            this.code = code;
+-        }
+-
+-        static String generateName(Assembly asm, Set<Long> eventfulAddrs) {
+-            Set<String> methods = new HashSet<String>();
+-            for (Long ea : eventfulAddrs) {
+-                String m = asm.getMethod(ea);
+-                if (m != null) {
+-                    methods.add(m);
+-                }
+-            }
+-            return Utils.join(methods, "; ");
+-        }
+-
+-        @Override
+-        public void printCode(PrintWriter pw, PerfEvents events) {
+-            if (code.size() > THRESHOLD_TOO_BIG) {
+-                pw.printf(" <region is too big to display, has %d lines, but threshold is %d>%n", code.size(), THRESHOLD_TOO_BIG);
+-            } else {
+-                for (ASMLine line : code) {
+-                    for (String event : EVENTS) {
+-                        long count = (line.addr != null) ? events.get(event).count(line.addr) : 0;
+-                        printLine(pw, events, event, count);
+-                    }
+-                    pw.println(line.code);
+-                }
+-            }
+-        }
+-
+-        @Override
+-        public String getType() {
+-            return "<generated code>";
+-        }
+-    }
+-
+-    static class NativeRegion extends Region {
+-        private final String lib;
+-
+-        NativeRegion(PerfEvents events, long begin, long end, Set<Long> eventfulAddrs) {
+-            super(generateName(events, eventfulAddrs), begin, end, eventfulAddrs);
+-            lib = resolveLib(events, eventfulAddrs);
+-        }
+-
+-        static String generateName(PerfEvents events, Set<Long> eventfulAddrs) {
+-            Set<String> methods = new HashSet<String>();
+-            for (Long ea : eventfulAddrs) {
+-                methods.add(events.methods.get(ea));
+-            }
+-            return Utils.join(methods, "; ");
+-        }
+-
+-        static String resolveLib(PerfEvents events, Set<Long> eventfulAddrs) {
+-            Set<String> libs = new HashSet<String>();
+-            for (Long ea : eventfulAddrs) {
+-                libs.add(events.libs.get(ea));
+-            }
+-            return Utils.join(libs, "; ");
+-        }
+-
+-        @Override
+-        public void printCode(PrintWriter pw, PerfEvents events) {
+-            pw.println(" <no assembly is recorded, native region>");
+-        }
+-
+-        @Override
+-        public String getType() {
+-            return "<native code in (" + lib + ")>";
+-        }
+-
+-        @Override
+-        public String getName() {
+-            return method + " (" + lib + ")";
+-        }
+-    }
+-
+-    static class KernelRegion extends Region {
+-        KernelRegion() {
+-            super("<kernel>", 0L, 0L, Collections.singleton(0L));
+-        }
+-
+-        @Override
+-        public void printCode(PrintWriter pw, PerfEvents events) {
+-            pw.println(" <no assembly is recorded, kernel region>");
+-        }
+-
+-        @Override
+-        public String getType() {
+-            return "<kernel>";
+-        }
+-    }
+-
+ }
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/profile/LinuxPerfUtil.java
+--- a/jmh-core/src/main/java/org/openjdk/jmh/profile/LinuxPerfUtil.java	Fri Feb 06 11:11:10 2015 +0300
++++ b/jmh-core/src/main/java/org/openjdk/jmh/profile/LinuxPerfUtil.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -24,13 +24,9 @@
+  */
+ package org.openjdk.jmh.profile;
+ 
+-import org.openjdk.jmh.util.InputStreamDrainer;
++import org.openjdk.jmh.util.Utils;
+ 
+-import java.io.ByteArrayOutputStream;
+-import java.io.IOException;
+-import java.util.ArrayList;
+ import java.util.Collection;
+-import java.util.Collections;
+ 
+ public class LinuxPerfUtil {
+ 
+@@ -39,41 +35,10 @@
+     public static final Collection<String> FAIL_MSGS;
+ 
+     static {
+-        FAIL_MSGS = tryWith("perf", "stat", "--log-fd", "2", "echo", "1");
++        FAIL_MSGS = Utils.tryWith("perf", "stat", "--log-fd", "2", "echo", "1");
+         IS_SUPPORTED = FAIL_MSGS.isEmpty();
+ 
+-        Collection<String> delay = tryWith("perf", "stat", "--log-fd", "2", "-D", "1", "echo", "1");
++        Collection<String> delay = Utils.tryWith("perf", "stat", "--log-fd", "2", "-D", "1", "echo", "1");
+         IS_DELAYED = delay.isEmpty();
+     }
+-
+-    private static Collection<String> tryWith(String... cmd) {
+-        Collection<String> messages = new ArrayList<String>();
+-        try {
+-            Process p = Runtime.getRuntime().exec(cmd);
+-
+-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+-
+-            // drain streams, else we might lock up
+-            InputStreamDrainer errDrainer = new InputStreamDrainer(p.getErrorStream(), baos);
+-            InputStreamDrainer outDrainer = new InputStreamDrainer(p.getInputStream(), baos);
+-
+-            errDrainer.start();
+-            outDrainer.start();
+-
+-            int err = p.waitFor();
+-
+-            errDrainer.join();
+-            outDrainer.join();
+-
+-            if (err > 0) {
+-                messages.add(baos.toString());
+-            }
+-        } catch (IOException ex) {
+-            return Collections.singleton(ex.getMessage());
+-        } catch (InterruptedException ex) {
+-            throw new IllegalStateException(ex);
+-        }
+-        return messages;
+-    }
+-
+ }
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/profile/WinPerfAsmProfiler.java
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/jmh-core/src/main/java/org/openjdk/jmh/profile/WinPerfAsmProfiler.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -0,0 +1,305 @@
++/*
++ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.  Oracle designates this
++ * particular file as subject to the "Classpath" exception as provided
++ * by Oracle in the LICENSE file that accompanied this code.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++package org.openjdk.jmh.profile;
++
++import org.openjdk.jmh.infra.BenchmarkParams;
++import org.openjdk.jmh.runner.Handshake;
++import org.openjdk.jmh.runner.HandshakeListener;
++import org.openjdk.jmh.util.Deduplicator;
++import org.openjdk.jmh.util.FileUtils;
++import org.openjdk.jmh.util.InputStreamDrainer;
++import org.openjdk.jmh.util.Multiset;
++import org.openjdk.jmh.util.PidResolver;
++import org.openjdk.jmh.util.RuntimeMXBeanPidResolver;
++import org.openjdk.jmh.util.TreeMultiset;
++import org.openjdk.jmh.util.Utils;
++
++import java.io.BufferedReader;
++import java.io.File;
++import java.io.FileOutputStream;
++import java.io.FileReader;
++import java.io.IOException;
++import java.util.Collection;
++import java.util.Collections;
++import java.util.HashMap;
++import java.util.LinkedHashMap;
++import java.util.Map;
++
++/**
++ * Windows performance profiler based on "xperf" utility.
++ * <p>
++ * You must install {@code Windows Performance Toolkit}. Once installed, locate directory with {@code xperf.exe}
++ * file and either add it to {@code PATH} environment variable, or set it to {@code jmh.perfasm.xperf.dir} system
++ * property.
++ * <p>
++ * This profiler counts only {@code SampledProfile} events. To achieve this, we set {@code xperf} providers to
++ * {@code loader+proc_thread+profile}. You may optionally save {@code xperf} binary or parsed outputs using
++ * {@code jmh.perfasm.savePerfBin} or {@code jmh.perfasm.savePerf} system properties respectively. If you do so and
++ * want to log more events, you can use {@code jmh.perfasm.xperf.providers} system property to override providers.
++ * However, you must specify {@code loader}, {@code proc_thread} and {@code profile} providers anyway. Otherwise
++ * sample events will not be generated and profiler will show nothing.
++ * <p>
++ * By default JDK distributive do not have debug symbols. If you want to analyze JVM internals, you must build OpenJDK
++ * on your own. Once built, go to {@code bin/server} directory and unpack {@code jvm.diz}. Now you have {@code jvm.pdb}
++ * file with JVM debug symbols. Finally, you must set debug symbols directory to {@code jmh.perfasm.symbol.dir} system
++ * property.
++ * <p>
++ * This profiler behaves differently comparing to it's Linux counterpart {@link LinuxPerfAsmProfiler}. Linux profiler
++ * employs {@code perf} utility which can be used to profile a single process. Therefore, Linux profiler wraps forked
++ * JVM command line. In contrast, {@code xperf} cannot profile only a single process. It have {@code -PidNewProcess}
++ * argument, but it's sole purpose is to start profiling before the process is started, so that one can be sure that
++ * none events generated by this process are missed. It does not filter events from other processes anyhow. For this
++ * reason, this profiler doesn't alter forked JVM startup command. Instead, it starts {@code xperf} recording in
++ * {@link #beforeTrial(BenchmarkParams)} method, and stops in {@link #afterTrial(BenchmarkParams, File, File)}. This
++ * leaves possibility to run this profiler in conjunction with some other profiler requiring startup command
++ * alteration.
++ * <p>
++ * For this reason the profiler must know PID of forked JVM process. JMH use {@link PidResolver} interface to get PID
++ * of the forked process. This profiler forces forked process to use {@link RuntimeMXBeanPidResolver}. This resolver
++ * will work in most scenarios. However, if profiler complains that it failed to get PID, you must implement your own
++ * resolver which will be able to get PID in your environment, and then set it's fully qualified class name to system
++ * property {@code jmh.perfasm.pid.resolver}.
++ */
++public class WinPerfAsmProfiler extends AbstractPerfAsmProfiler implements HandshakeListener {
++    /**
++     * Path to "xperf" installation directory. Empty by default, so that xperf is expected to be in PATH.
++     */
++    private static final String XPERF_DIR = System.getProperty("jmh.perfasm.xperf.dir");
++
++    /**
++     * Providers.
++     */
++    private static final String XPERF_PROVIDERS = System.getProperty("jmh.perfasm.xperf.providers",
++        "loader+proc_thread+profile");
++
++    /**
++     * PID resolver class.
++     */
++    private static final String PID_RESOLVER_CLASS =
++        System.getProperty("jmh.perfasm.pid.resolver", RuntimeMXBeanPidResolver.class.getName());
++
++    /**
++     * Path to a directory with jvm.dll symbols (optional).
++     */
++    private static final String SYMBOL_DIR = System.getProperty("jmh.perfasm.symbol.dir");
++
++    /**
++     * Path to binary.
++     */
++    private static final String PATH;
++
++    static {
++        PATH = XPERF_DIR != null && !XPERF_DIR.isEmpty() ? XPERF_DIR + File.separatorChar + "xperf" : "xperf";
++
++        Collection<String> errs = Utils.tryWith(PATH);
++
++        if (errs != null && !errs.isEmpty())
++            FAIL_MSGS.addAll(errs);
++
++        // There is only one predefined event type to gather.
++        EVENTS = new String[] { "SampledProfile" };
++    }
++
++    /** PID. */
++    private volatile String pid;
++
++    /**
++     * Constructor.
++     *
++     * @throws IOException If failed.
++     */
++    public WinPerfAsmProfiler() throws IOException {
++        super();
++    }
++
++    @Override
++    public Collection<String> addJVMOptions(BenchmarkParams params) {
++        // Add PID resolver class.
++        Collection<String> opts = super.addJVMOptions(params);
++
++        opts.add("-D" + PidResolver.PROP_CLS_NAME + "=" + PID_RESOLVER_CLASS);
++
++        return opts;
++    }
++
++    @Override
++    public Collection<String> addJVMInvokeOptions(BenchmarkParams params) {
++        // "xperf" cannot be started to track particular process as "perf" in Linux does.
++        // Therefore we do not alter JVM invoke options anyhow. Instead, profiler will be started
++        // during "before-trial" stage.
++        return Collections.emptyList();
++    }
++
++    @Override
++    public void beforeTrial(BenchmarkParams params) {
++        // Start profiler before forked JVM is started.
++        Collection<String> errs = Utils.tryWith(PATH, "-on", XPERF_PROVIDERS);
++
++        if (!errs.isEmpty())
++            throw new IllegalStateException("Failed to start xperf: " + errs);
++    }
++
++    @Override
++    public String label() {
++        return "xperfasm";
++    }
++
++    @Override
++    public String getDescription() {
++        return "Windows xperf + PrintAssembly Profiler";
++    }
++
++    @Override
++    public void onHandshake(Handshake handshake) {
++        // Preserve process ID.
++        pid = handshake.getPid();
++
++        if (pid == null)
++            throw new IllegalStateException("Client didn't provide PID (did you set PidResolver?)");
++    }
++
++    @Override
++    protected void parseEvents() {
++        // 1. Stop profiling by calling xperf dumper.
++        Collection<String> errs = Utils.tryWith(PATH, "-d", perfBinData);
++
++        if (!errs.isEmpty())
++            throw new IllegalStateException("Failed to stop xperf: " + errs);
++
++        // 2. Convert binary data to text form.
++        try {
++            Process p = Runtime.getRuntime().exec(new String[] { PATH, "-i", perfBinData, "-symbols", "-a", "dumper" },
++                new String[] { "_NT_SYMBOL_PATH=" + SYMBOL_DIR });
++
++            FileOutputStream fos = new FileOutputStream(perfParsedData);
++
++            InputStreamDrainer errDrainer = new InputStreamDrainer(p.getErrorStream(), fos);
++            InputStreamDrainer outDrainer = new InputStreamDrainer(p.getInputStream(), fos);
++
++            errDrainer.start();
++            outDrainer.start();
++
++            p.waitFor();
++
++            errDrainer.join();
++            outDrainer.join();
++        } catch (IOException ex) {
++            throw new IllegalStateException(ex);
++        } catch (InterruptedException ex) {
++            throw new IllegalStateException(ex);
++        }
++    }
++
++    @Override
++    protected PerfEvents readEvents(double skipSec) {
++        FileReader fr = null;
++        try {
++            Deduplicator<String> dedup = new Deduplicator<String>();
++
++            fr = new FileReader(perfParsedData);
++            BufferedReader reader = new BufferedReader(fr);
++
++            Map<Long, String> methods = new HashMap<Long, String>();
++            Map<Long, String> libs = new HashMap<Long, String>();
++            Map<String, Multiset<Long>> events = new LinkedHashMap<String, Multiset<Long>>();
++            for (String evName : EVENTS) {
++                events.put(evName, new TreeMultiset<Long>());
++            }
++
++            String line;
++            while ((line = reader.readLine()) != null) {
++                line = line.trim();
++
++                String[] elems = line.split(",");
++
++                String evName = elems[0].trim();
++
++                // We work with only one event type - "SampledProfile".
++                if (!EVENTS[0].equals(evName))
++                    continue;
++
++                // Check PID.
++                String pidStr = elems[2].trim();
++
++                int pidOpenIdx = pidStr.indexOf("(");
++                int pidCloseIdx = pidStr.indexOf(")");
++
++                if (pidOpenIdx == -1 || pidCloseIdx == -1 || pidCloseIdx < pidOpenIdx)
++                    continue; // Malformed PID, probably this is the header.
++
++                pidStr = pidStr.substring(pidOpenIdx + 1, pidCloseIdx).trim();
++
++                if (!pid.equals(pidStr))
++                    continue;
++
++                // Check timestamp
++                String timeStr = elems[1].trim();
++
++                double time = Double.valueOf(timeStr) / 1000000;
++
++                if (time < skipSec)
++                    continue;
++
++                // Get address.
++                String addrStr = elems[4].trim().replace("0x", "");
++
++                // Get lib and function name.
++                String libSymStr = elems[7].trim();
++
++                String lib = libSymStr.substring(0, libSymStr.indexOf('!'));
++                String symbol = libSymStr.substring(libSymStr.indexOf('!') + 1);
++
++                Multiset<Long> evs = events.get(evName);
++
++                assert evs != null;
++
++                try {
++                    Long addr = Long.valueOf(addrStr, 16);
++                    evs.add(addr);
++                    methods.put(addr, dedup.dedup(symbol));
++                    libs.put(addr, dedup.dedup(lib));
++                } catch (NumberFormatException e) {
++                    // kernel addresses like "ffffffff810c1b00" overflow signed long,
++                    // record them as dummy address
++                    evs.add(0L);
++                }
++            }
++
++            methods.put(0L, "<kernel>");
++
++            return new PerfEvents(events, methods, libs);
++        } catch (IOException e) {
++            return new PerfEvents();
++        } finally {
++            FileUtils.safelyClose(fr);
++        }
++    }
++
++    @Override
++    protected String perfBinaryExtension() {
++        // Files with ".etl" extension can be opened by "Windows Performance Analyzer" right away.
++        return ".etl";
++    }
++}
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/runner/ForkedMain.java
+--- a/jmh-core/src/main/java/org/openjdk/jmh/runner/ForkedMain.java	Fri Feb 06 11:11:10 2015 +0300
++++ b/jmh-core/src/main/java/org/openjdk/jmh/runner/ForkedMain.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -71,7 +71,7 @@
+                 BinaryLinkClient link = new BinaryLinkClient(hostName, hostPort);
+                 linkRef.set(link);
+ 
+-                Options options = link.requestOptions();
++                Options options = link.handshake();
+ 
+                 // dump outputs into binary link
+                 nakedErr = System.err;
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/runner/Handshake.java
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/jmh-core/src/main/java/org/openjdk/jmh/runner/Handshake.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -0,0 +1,55 @@
++/*
++ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.  Oracle designates this
++ * particular file as subject to the "Classpath" exception as provided
++ * by Oracle in the LICENSE file that accompanied this code.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++package org.openjdk.jmh.runner;
++
++import java.io.Serializable;
++
++/**
++ * Handshake value object.
++ */
++public class Handshake implements Serializable {
++    private static final long serialVersionUID = -9062250619652170970L;
++
++    /** PID. */
++    private final String pid;
++
++    /**
++     * Constructor.
++     *
++     * @param pid PID.
++     */
++    public Handshake(String pid) {
++        this.pid = pid;
++    }
++
++    /**
++     * Gets PID.
++     *
++     * @return PID.
++     */
++    public String getPid() {
++        return pid;
++    }
++}
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/runner/HandshakeListener.java
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/jmh-core/src/main/java/org/openjdk/jmh/runner/HandshakeListener.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -0,0 +1,37 @@
++/*
++ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.  Oracle designates this
++ * particular file as subject to the "Classpath" exception as provided
++ * by Oracle in the LICENSE file that accompanied this code.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++package org.openjdk.jmh.runner;
++
++/**
++ * Binary link handshake listener.
++ */
++public interface HandshakeListener {
++    /**
++     * Callback invoked when server receives handshake message from server.
++     *
++     * @param handshake Handshake.
++     */
++    public void onHandshake(Handshake handshake);
++}
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/runner/Runner.java
+--- a/jmh-core/src/main/java/org/openjdk/jmh/runner/Runner.java	Fri Feb 06 11:11:10 2015 +0300
++++ b/jmh-core/src/main/java/org/openjdk/jmh/runner/Runner.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -590,6 +590,9 @@
+                 javaOptions.addAll(prof.addJVMOptions(params));
+                 printOut &= prof.allowPrintOut();
+                 printErr &= prof.allowPrintErr();
++
++                if (prof instanceof HandshakeListener)
++                    server.addHandshakeListener((HandshakeListener)prof);
+             }
+ 
+             boolean forcePrint = options.verbosity().orElse(Defaults.VERBOSITY).equalsOrHigherThan(VerboseMode.EXTRA);
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/runner/link/BinaryLinkClient.java
+--- a/jmh-core/src/main/java/org/openjdk/jmh/runner/link/BinaryLinkClient.java	Fri Feb 06 11:11:10 2015 +0300
++++ b/jmh-core/src/main/java/org/openjdk/jmh/runner/link/BinaryLinkClient.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -27,9 +27,11 @@
+ import org.openjdk.jmh.results.IterationResult;
+ import org.openjdk.jmh.runner.ActionPlan;
+ import org.openjdk.jmh.runner.BenchmarkException;
++import org.openjdk.jmh.runner.Handshake;
+ import org.openjdk.jmh.runner.format.OutputFormat;
+ import org.openjdk.jmh.runner.options.Options;
+ import org.openjdk.jmh.util.FileUtils;
++import org.openjdk.jmh.util.Utils;
+ 
+ import java.io.BufferedInputStream;
+ import java.io.BufferedOutputStream;
+@@ -133,13 +135,13 @@
+         }
+     }
+ 
+-    public Options requestOptions() throws IOException, ClassNotFoundException {
++    public Options handshake() throws IOException, ClassNotFoundException {
+         synchronized (lock) {
+-            pushFrame(new InfraFrame(InfraFrame.Type.OPTIONS_REQUEST));
++            pushFrame(new InfraFrame(InfraFrame.Type.HANDSHAKE_REQUEST, new Handshake(Utils.getPid())));
+ 
+             Object reply = readFrame();
+-            if (reply instanceof OptionsFrame) {
+-                return (((OptionsFrame) reply).getOpts());
++            if (reply instanceof HandshakeFrame) {
++                return (((HandshakeFrame) reply).getOpts());
+             } else {
+                 throw new IllegalStateException("Got the erroneous reply: " + reply);
+             }
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/runner/link/BinaryLinkServer.java
+--- a/jmh-core/src/main/java/org/openjdk/jmh/runner/link/BinaryLinkServer.java	Fri Feb 06 11:11:10 2015 +0300
++++ b/jmh-core/src/main/java/org/openjdk/jmh/runner/link/BinaryLinkServer.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -28,6 +28,8 @@
+ import org.openjdk.jmh.runner.ActionPlan;
+ import org.openjdk.jmh.runner.BenchmarkException;
+ import org.openjdk.jmh.runner.Defaults;
++import org.openjdk.jmh.runner.Handshake;
++import org.openjdk.jmh.runner.HandshakeListener;
+ import org.openjdk.jmh.runner.format.OutputFormat;
+ import org.openjdk.jmh.runner.options.Options;
+ import org.openjdk.jmh.runner.options.VerboseMode;
+@@ -74,12 +76,14 @@
+     private final AtomicReference<List<IterationResult>> results;
+     private final AtomicReference<BenchmarkException> exception;
+     private final AtomicReference<ActionPlan> plan;
++    private final List<HandshakeListener> handshakeLsnrs;
+ 
+     public BinaryLinkServer(Options opts, OutputFormat out) throws IOException {
+         this.opts = opts;
+         this.out = out;
+         this.methods = new HashMap<String, Method>();
+         this.forbidden = new HashSet<String>();
++        this.handshakeLsnrs = new ArrayList<HandshakeListener>();
+ 
+         // enumerate methods
+         for (Method m : OutputFormat.class.getMethods()) {
+@@ -150,6 +154,15 @@
+         this.plan.set(actionPlan);
+     }
+ 
++    /**
++     * Register handshake listener.
++     *
++     * @param handshakeLsnr Handshake listener.
++     */
++    public void addHandshakeListener(HandshakeListener handshakeLsnr) {
++        this.handshakeLsnrs.add(handshakeLsnr);
++    }
++
+     private InetAddress getListenAddress() {
+         // Try to use user-provided override first.
+         String addr = System.getProperty("jmh.link.address");
+@@ -334,8 +347,15 @@
+ 
+         private void handleInfra(InfraFrame req) throws IOException {
+             switch (req.getType()) {
+-                case OPTIONS_REQUEST:
+-                    oos.writeObject(new OptionsFrame(opts));
++                case HANDSHAKE_REQUEST:
++                    Handshake handshake = req.getPayload();
++
++                    assert handshake != null;
++
++                    for (HandshakeListener handshakeLsnr : handshakeLsnrs)
++                        handshakeLsnr.onHandshake(handshake);
++
++                    oos.writeObject(new HandshakeFrame(opts));
+                     oos.flush();
+                     break;
+                 case ACTION_PLAN_REQUEST:
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/runner/link/HandshakeFrame.java
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/jmh-core/src/main/java/org/openjdk/jmh/runner/link/HandshakeFrame.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -0,0 +1,43 @@
++/*
++ * Copyright (c) 2005, 2013, Oracle and/or its affiliates. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.  Oracle designates this
++ * particular file as subject to the "Classpath" exception as provided
++ * by Oracle in the LICENSE file that accompanied this code.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++package org.openjdk.jmh.runner.link;
++
++import org.openjdk.jmh.runner.options.Options;
++
++import java.io.Serializable;
++
++class HandshakeFrame implements Serializable {
++    private static final long serialVersionUID = 2082214387637725282L;
++
++    private final Options opts;
++
++    public HandshakeFrame(Options opts) {
++        this.opts = opts;
++    }
++
++    public Options getOpts() {
++        return opts;
++    }
++}
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/runner/link/InfraFrame.java
+--- a/jmh-core/src/main/java/org/openjdk/jmh/runner/link/InfraFrame.java	Fri Feb 06 11:11:10 2015 +0300
++++ b/jmh-core/src/main/java/org/openjdk/jmh/runner/link/InfraFrame.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -31,17 +31,28 @@
+ 
+     private final Type type;
+ 
++    private final Object payload;
++
+     public InfraFrame(Type type) {
++        this(type, null);
++    }
++
++    public InfraFrame(Type type, Object payload) {
+         this.type = type;
++        this.payload = payload;
+     }
+ 
+     public Type getType() {
+         return type;
+     }
+ 
++    @SuppressWarnings("unchecked")
++    public <T> T getPayload() {
++        return (T)payload;
++    }
++
+     public enum Type {
+-        OPTIONS_REQUEST,
++        HANDSHAKE_REQUEST,
+         ACTION_PLAN_REQUEST,
+     }
+-
+ }
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/runner/link/OptionsFrame.java
+--- a/jmh-core/src/main/java/org/openjdk/jmh/runner/link/OptionsFrame.java	Fri Feb 06 11:11:10 2015 +0300
++++ /dev/null	Thu Jan 01 00:00:00 1970 +0000
+@@ -1,43 +0,0 @@
+-/*
+- * Copyright (c) 2005, 2013, Oracle and/or its affiliates. All rights reserved.
+- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+- *
+- * This code is free software; you can redistribute it and/or modify it
+- * under the terms of the GNU General Public License version 2 only, as
+- * published by the Free Software Foundation.  Oracle designates this
+- * particular file as subject to the "Classpath" exception as provided
+- * by Oracle in the LICENSE file that accompanied this code.
+- *
+- * This code is distributed in the hope that it will be useful, but WITHOUT
+- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+- * version 2 for more details (a copy is included in the LICENSE file that
+- * accompanied this code).
+- *
+- * You should have received a copy of the GNU General Public License version
+- * 2 along with this work; if not, write to the Free Software Foundation,
+- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+- *
+- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+- * or visit www.oracle.com if you need additional information or have any
+- * questions.
+- */
+-package org.openjdk.jmh.runner.link;
+-
+-import org.openjdk.jmh.runner.options.Options;
+-
+-import java.io.Serializable;
+-
+-class OptionsFrame implements Serializable {
+-    private static final long serialVersionUID = 2082214387637725282L;
+-
+-    private final Options opts;
+-
+-    public OptionsFrame(Options opts) {
+-        this.opts = opts;
+-    }
+-
+-    public Options getOpts() {
+-        return opts;
+-    }
+-}
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/util/NoopPidResolver.java
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/jmh-core/src/main/java/org/openjdk/jmh/util/NoopPidResolver.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -0,0 +1,37 @@
++/*
++ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.  Oracle designates this
++ * particular file as subject to the "Classpath" exception as provided
++ * by Oracle in the LICENSE file that accompanied this code.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++package org.openjdk.jmh.util;
++
++/**
++ * PID resolver which always returns {@code null}.
++ * <p>
++ * This is default implementation as it is save and never throw any exceptions.
++ */
++public class NoopPidResolver implements PidResolver {
++    @Override
++    public String getPid() {
++        return null;
++    }
++}
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/util/PidResolver.java
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/jmh-core/src/main/java/org/openjdk/jmh/util/PidResolver.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -0,0 +1,51 @@
++/*
++ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.  Oracle designates this
++ * particular file as subject to the "Classpath" exception as provided
++ * by Oracle in the LICENSE file that accompanied this code.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++package org.openjdk.jmh.util;
++
++import java.lang.management.RuntimeMXBean;
++
++/**
++ * Process ID resolver.
++ * <p>
++ * Available implementations:
++ * <ul>
++ *     <li>{@link NoopPidResolver} - does nothing and always returns {@code null}. This is the default resolver.</li>
++ *     <li>{@link RuntimeMXBeanPidResolver} - uses runtime {@link RuntimeMXBean} to get process ID.</li>
++ * </ul>
++ */
++public interface PidResolver {
++    /** Property with PID resolver class name. */
++    public static final String PROP_CLS_NAME = "jmh.pid.resolver";
++
++    /** PID resolver class name. */
++    public static final String CLS_NAME = System.getProperty(PROP_CLS_NAME, NoopPidResolver.class.getName());
++
++    /**
++     * Gets PID.
++     *
++     * @return PID.
++     */
++    public String getPid();
++}
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/util/RuntimeMXBeanPidResolver.java
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/jmh-core/src/main/java/org/openjdk/jmh/util/RuntimeMXBeanPidResolver.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -0,0 +1,49 @@
++/*
++ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.  Oracle designates this
++ * particular file as subject to the "Classpath" exception as provided
++ * by Oracle in the LICENSE file that accompanied this code.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++package org.openjdk.jmh.util;
++
++import java.lang.management.ManagementFactory;
++
++/**
++ * PID resolver which uses runtime MX bean to get process ID.
++ */
++public class RuntimeMXBeanPidResolver implements PidResolver {
++    /** Delimiter between PID and hostname. */
++    private static final String DELIM = "@";
++
++    @Override
++    public String getPid() {
++        String name = ManagementFactory.getRuntimeMXBean().getName();
++
++        if (name != null) {
++            int idx = name.indexOf(DELIM);
++
++            if (idx != -1)
++                return name.substring(0, name.indexOf(DELIM));
++        }
++
++        throw new IllegalStateException("Unsupported PID format: " + name);
++    }
++}
+diff -r fac0187b2526 jmh-core/src/main/java/org/openjdk/jmh/util/Utils.java
+--- a/jmh-core/src/main/java/org/openjdk/jmh/util/Utils.java	Fri Feb 06 11:11:10 2015 +0300
++++ b/jmh-core/src/main/java/org/openjdk/jmh/util/Utils.java	Sun Feb 08 18:46:42 2015 +0300
+@@ -26,8 +26,10 @@
+ 
+ import sun.misc.Unsafe;
+ 
++import java.io.ByteArrayOutputStream;
+ import java.io.Console;
+ import java.io.File;
++import java.io.IOException;
+ import java.io.PrintWriter;
+ import java.io.StringWriter;
+ import java.lang.reflect.Field;
+@@ -39,6 +41,7 @@
+ import java.util.ArrayList;
+ import java.util.Arrays;
+ import java.util.Collection;
++import java.util.Collections;
+ import java.util.List;
+ import java.util.concurrent.ExecutorService;
+ import java.util.concurrent.Executors;
+@@ -48,7 +51,30 @@
+ 
+     private static final Unsafe U;
+ 
++    /** Cached PID. */
++    private static final String PID;
++
++    /** Exception occurred during PID resolving. */
++    private static final RuntimeException PID_ERR;
++
+     static {
++        // 1. Resolve PID.
++        String pid = null;
++        RuntimeException pidErr = null;
++
++        try {
++            PidResolver rslvr = (PidResolver)Class.forName(PidResolver.CLS_NAME).newInstance();
++
++            pid = rslvr.getPid();
++        }
++        catch (Throwable e) {
++            pidErr = new IllegalStateException("Failed to resolve PID.", e);
++        }
++
++        PID = pid;
++        PID_ERR = pidErr;
++
++        // 2. Get Unsafe instance.
+         try {
+             Field unsafe = Unsafe.class.getDeclaredField("theUnsafe");
+             unsafe.setAccessible(true);
+@@ -262,4 +288,45 @@
+                 (isWindows() ? ".exe" : "");
+     }
+ 
++    /**
++     * Gets PID of the given JVM.
++     *
++     * @return PID.
++     */
++    public static String getPid() {
++        if (PID_ERR != null)
++            throw PID_ERR;
++
++        return PID;
++    }
++
++    public static Collection<String> tryWith(String... cmd) {
++        Collection<String> messages = new ArrayList<String>();
++        try {
++            Process p = Runtime.getRuntime().exec(cmd);
++
++            ByteArrayOutputStream baos = new ByteArrayOutputStream();
++
++            // drain streams, else we might lock up
++            InputStreamDrainer errDrainer = new InputStreamDrainer(p.getErrorStream(), baos);
++            InputStreamDrainer outDrainer = new InputStreamDrainer(p.getInputStream(), baos);
++
++            errDrainer.start();
++            outDrainer.start();
++
++            int err = p.waitFor();
++
++            errDrainer.join();
++            outDrainer.join();
++
++            if (err > 0) {
++                messages.add(baos.toString());
++            }
++        } catch (IOException ex) {
++            return Collections.singleton(ex.getMessage());
++        } catch (InterruptedException ex) {
++            throw new IllegalStateException(ex);
++        }
++        return messages;
++    }
+ }

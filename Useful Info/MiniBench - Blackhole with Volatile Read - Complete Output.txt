@@ -1,0 +1,48 @@
+Running benchmark: JonSkeetReadonlyFields.baseline
+Warmup:     616,893,594 iterations in 10,000.003 ms, 16.210 ns/op
+Benchmark:  616,893,408 iterations in    179.831 ms,  0.292 ns/op
+Benchmark:  616,893,408 iterations in    179.637 ms,  0.291 ns/op
+Benchmark:  616,893,408 iterations in    182.806 ms,  0.296 ns/op
+Benchmark:  616,893,408 iterations in    177.164 ms,  0.287 ns/op
+
+Running benchmark: JonSkeetReadonlyFields.SlowVersion
+Warmup:     273,529,031 iterations in 10,000.000 ms, 36.559 ns/op
+Benchmark:  273,529,031 iterations in  5,848.226 ms, 21.381 ns/op
+Benchmark:  273,529,031 iterations in  5,854.869 ms, 21.405 ns/op
+Benchmark:  273,529,031 iterations in  5,852.410 ms, 21.396 ns/op
+Benchmark:  273,529,031 iterations in  5,846.447 ms, 21.374 ns/op
+
+Running benchmark: JonSkeetReadonlyFields.SlowVersionMeasureWrong
+Warmup:     380,649,198 iterations in 10,000.000 ms, 26.271 ns/op
+Benchmark:  380,649,198 iterations in  4,032.725 ms, 10.594 ns/op
+Benchmark:  380,649,198 iterations in  4,027.201 ms, 10.580 ns/op
+Benchmark:  380,649,198 iterations in  4,034.850 ms, 10.600 ns/op
+Benchmark:  380,649,198 iterations in  4,031.749 ms, 10.592 ns/op
+
+Running benchmark: JonSkeetReadonlyFields.FastVersion
+Warmup:     358,468,559 iterations in 10,000.000 ms, 27.896 ns/op
+Benchmark:  358,468,559 iterations in  5,198.256 ms, 14.501 ns/op
+Benchmark:  358,468,559 iterations in  5,198.850 ms, 14.503 ns/op
+Benchmark:  358,468,559 iterations in  5,218.931 ms, 14.559 ns/op
+Benchmark:  358,468,559 iterations in  5,224.177 ms, 14.574 ns/op
+
+Running benchmark: JonSkeetReadonlyFields.FastVersionMeasureWrong
+Warmup:     565,529,041 iterations in 10,000.000 ms, 17.683 ns/op
+Benchmark:  565,529,041 iterations in  1,006.931 ms,  1.781 ns/op
+Benchmark:  565,529,041 iterations in    990.691 ms,  1.752 ns/op
+Benchmark:  565,529,041 iterations in  1,000.977 ms,  1.770 ns/op
+Benchmark:  565,529,041 iterations in    999.695 ms,  1.768 ns/op
+
+Running benchmark: JonSkeetReadonlyFields.EvenFasterVersion
+Warmup:     370,110,172 iterations in 10,000.000 ms, 27.019 ns/op
+Benchmark:  370,110,172 iterations in  5,012.923 ms, 13.544 ns/op
+Benchmark:  370,110,172 iterations in  5,032.580 ms, 13.598 ns/op
+Benchmark:  370,110,172 iterations in  4,994.705 ms, 13.495 ns/op
+Benchmark:  370,110,172 iterations in  4,971.037 ms, 13.431 ns/op
+
+Running benchmark: JonSkeetReadonlyFields.EvenFasterVersionMeasureWrong
+Warmup:     598,199,093 iterations in 10,000.000 ms, 16.717 ns/op
+Benchmark:  598,199,075 iterations in    439.796 ms,  0.735 ns/op
+Benchmark:  598,199,075 iterations in    440.898 ms,  0.737 ns/op
+Benchmark:  598,199,075 iterations in    436.196 ms,  0.729 ns/op
+Benchmark:  598,199,075 iterations in    436.321 ms,  0.729 ns/op
