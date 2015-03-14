@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Reflection;
 using System.Security.Policy;
+using System.Text.RegularExpressions;
 
 namespace MiniBench.Core
 {
@@ -23,17 +24,26 @@ namespace MiniBench.Core
             foreach (Type type in assembly.GetTypes())
             {
                 if (!type.IsClass || !type.IsPublic || type.IsAbstract ||
-                    typeof(IBenchmarkTarget).IsAssignableFrom(type) == false || 
+                    typeof(IBenchmarkTarget).IsAssignableFrom(type) == false)
+                {
+                    continue;
+                }
+                    
+                if (String.IsNullOrEmpty(options.BenchmarkPrefix) == false &&
                     type.Name.StartsWith(options.BenchmarkPrefix) == false)
                 {
                     continue;
                 }
 
+                if (String.IsNullOrEmpty(options.BenchmarkRegex) == false &&
+                    Regex.IsMatch(type.Name, options.BenchmarkRegex) == false)
+                {
+                    continue;
+                }
+
                 //For example: "Generated_Runner_MiniBench_Demo_SampleBenchmark_DemoTest" comes from DemoTest() in MiniBench.Demo.SampleBenchmark.cs
-                Console.WriteLine("Expected:  " + options.BenchmarkPrefix);
-                Console.WriteLine("Found:     " + type.Name);
-                //Console.WriteLine("FullName:  " + type.FullName);
-                //Console.WriteLine("Namespace: " + type.Namespace);
+                //Console.WriteLine("Expected:  " + options.BenchmarkPrefix);
+                //Console.WriteLine("Found:     " + type.Name);
                 IBenchmarkTarget obj = assembly.CreateInstance(type.FullName) as IBenchmarkTarget;
                 if (obj == null)
                 {
@@ -41,10 +51,15 @@ namespace MiniBench.Core
                     continue;
                 }
 
+                // TODO review this list of App Domain gotchas and see if we will run into any of them https://github.com/fixie/fixie/issues/8
                 AppDomain domain = AppDomain.CreateDomain("MiniBench runner", new Evidence(), Environment.CurrentDirectory, Environment.CurrentDirectory, false);
+                // TODO complete this App Domain stuff, what Type do we want to load into the App Domain?
                 //BenchmarkResult loader = CreateInstance<IBenchmarkTarget>(domain);
-                BenchmarkResult result = obj.RunTest(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(0100));
-                Console.WriteLine(result + "\n");
+                //BenchmarkResult result = obj.RunTest(TimeSpan.FromMilliseconds(2000), TimeSpan.FromMilliseconds(2000));
+                BenchmarkResult result = obj.RunTest(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+                //BenchmarkResult result = obj.RunTest(TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(5));
+                //Console.WriteLine(result);
+                Console.WriteLine();
             }
         }
 

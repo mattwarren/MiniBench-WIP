@@ -47,10 +47,12 @@ namespace MiniBench.Benchmarks
                 Console.WriteLine(""Running benchmark: {0}.{1}"", @type, @method);
                 ##CLASS-NAME## benchmarkClass = GetBenchmarkClass();
 
+                //System.Diagnostics.Debugger.Launch();
+                //System.Diagnostics.Debugger.Break();
+
                 // Make sure the method is JIT-compiled.
                 ##BENCHMARK-METHOD-CALL##;
 
-                long ticks = (long)(Stopwatch.Frequency * warmupTime.TotalSeconds);
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
 
@@ -58,6 +60,7 @@ namespace MiniBench.Benchmarks
 
                 Stopwatch stopwatch = new Stopwatch();
                 long warmupIterations = 0;
+                long ticks = (long)(Stopwatch.Frequency * warmupTime.TotalSeconds);
                 stopwatch.Reset();
                 stopwatch.Start();
                 warmupIterations = 0;
@@ -110,9 +113,9 @@ namespace MiniBench.Benchmarks
 }";
 
         private static string benchmarkLauncherTemplate =
-@"//using System;
+@"using System;
+using System.Reflection;
 using MiniBench.Core;
-//using ##NAMESPACE-NAME##;
 
 namespace MiniBench.Benchmarks
 {
@@ -120,12 +123,33 @@ namespace MiniBench.Benchmarks
     {
         static void Main(string[] args)
         {
+            string benchmarkPrefix = ""Generated_Runner_"";
+            if (args.Length > 0)
+            {
+                Options opt = new OptionsBuilder()
+                                    .Include(args[0])
+                                    .Build();
+                new Runner(opt).Run();
+            }
+            else
+            {
+                Assembly assembly = Assembly.GetExecutingAssembly();
+                foreach (Type type in assembly.GetTypes())
+                {
+                    if (type.IsClass && type.IsPublic && !type.IsAbstract 
+                        && typeof(IBenchmarkTarget).IsAssignableFrom(type))
+                    {
+                        Console.WriteLine(type.Name.Replace(benchmarkPrefix, String.Empty)
+                                                   .Replace(""_"", "".""));
+                    }
+                }
+            }
+
             // TODO put in here any attributes that control the benchmark parameters
-            Options opt = new OptionsBuilder()
-                    //.Include(typeof(##CLASS-NAME##))
-                    .Include(typeof(##NAMESPACE-NAME##.##CLASS-NAME##))
-                    .Build();
-            new Runner(opt).Run();
+            //Options opt = new OptionsBuilder()
+            //        .Include(typeof(##NAMESPACE-NAME##.##CLASS-NAME##))
+            //        .Build();
+            //new Runner(opt).Run();
         }
     }
 }";
@@ -144,18 +168,14 @@ namespace MiniBench.Benchmarks
                                 .Replace(namespaceReplaceText, namespaceName)
                                 .Replace(classReplaceText, className)
                                 .Replace(methodReplaceText, methodName)
-                                //.Replace(methodParametersReplaceText, "")
                                 .Replace(benchmarkMethodCallReplaceText, benchmarkMethodCall)
                                 .Replace(generatedClassReplaceText, generatedClassName);
             return generatedBenchmark;
         }
 
-        internal static string ProcessLauncherTemplate(string namespaceName, string className)
+        internal static string ProcessLauncherTemplate()
         {
-            var benchmarkLauncher = benchmarkLauncherTemplate
-                                .Replace(namespaceReplaceText, namespaceName)
-                                .Replace(classReplaceText, className);
-            return benchmarkLauncher;
+            return benchmarkLauncherTemplate;
         }
     }
 }

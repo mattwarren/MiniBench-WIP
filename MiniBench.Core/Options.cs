@@ -11,6 +11,9 @@ namespace MiniBench.Core
         private readonly string benchmarkPrefix;
         public string BenchmarkPrefix { get { return benchmarkPrefix; } }
 
+        private readonly string benchmarkRegex;
+        public string BenchmarkRegex { get { return benchmarkRegex; } }
+
         private static readonly string GeneratedPrefix = "Generated_Runner";
 
         public Options(Type benchmarkType)
@@ -20,6 +23,11 @@ namespace MiniBench.Core
                                             GeneratedPrefix,
                                             benchmarkType.Namespace.Replace('.', '_'),
                                             benchmarkType.Name);
+        }
+
+        public Options(String benchmarkRegex)
+        {
+            this.benchmarkRegex = benchmarkRegex;
         }
     }
 }

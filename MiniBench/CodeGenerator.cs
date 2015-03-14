@@ -16,10 +16,7 @@ namespace MiniBench
     {
         private readonly ProjectSettings projectSettings;
 
-        // TODO The version CSharp2/CSharp4 should be auto-detected from the .csproj file used in the Benchmark itself!
-        private readonly CSharpParseOptions parseOptions = 
-            //new CSharpParseOptions(kind: SourceCodeKind.Regular, languageVersion: LanguageVersion.CSharp2);
-            new CSharpParseOptions(kind: SourceCodeKind.Regular, languageVersion: LanguageVersion.CSharp4);
+        private readonly CSharpParseOptions parseOptions;
 
         private readonly Encoding defaultEncoding = Encoding.UTF8;
 
@@ -28,18 +25,23 @@ namespace MiniBench
         internal CodeGenerator(ProjectSettings projectSettings)
         {
             this.projectSettings = projectSettings;
+
+            parseOptions = new CSharpParseOptions(kind: SourceCodeKind.Regular, 
+                                    languageVersion: projectSettings.TargetFrameworkVersion);
         }
 
         internal void GenerateCode()
         {
             var outputDirectory = Environment.CurrentDirectory;
+            var generatedCodeDirectory = Path.Combine(outputDirectory, "GeneratedCode");
+            Directory.CreateDirectory(generatedCodeDirectory);
             var fileDeletionTimer = Stopwatch.StartNew();
-            foreach (var existingGeneratedFile in Directory.EnumerateFiles(outputDirectory, filePrefix + "*"))
+            foreach (var existingGeneratedFile in Directory.EnumerateFiles(generatedCodeDirectory, filePrefix + "*"))
             {
                 File.Delete(existingGeneratedFile);
             }
             fileDeletionTimer.Stop();
-            Console.WriteLine("Took {0} ({1,7:N2}ms) - to delete existing files from disk\n", fileDeletionTimer.Elapsed, fileDeletionTimer.ElapsedMilliseconds);
+            Console.WriteLine("\nTook {0} ({1,7:N2}ms) - to delete existing files from disk\n", fileDeletionTimer.Elapsed, fileDeletionTimer.ElapsedMilliseconds);
 
             var allSyntaxTrees = new List<SyntaxTree>(GenerateEmbeddedCode());
             foreach (var file in projectSettings.SourceFiles.Where(f => f.StartsWith("Properties\\") == false))
@@ -57,19 +59,11 @@ namespace MiniBench
 
                 allSyntaxTrees.Add(benchmarkTree);
 
-                var generatedRunners = GenerateRunners(allMethods, namespaceName, className, outputDirectory);
+                var generatedRunners = GenerateRunners(allMethods, namespaceName, className, generatedCodeDirectory);
                 allSyntaxTrees.AddRange(generatedRunners);
-
-                // TODO we should do this here instead, so there is a launcher per benchmark
-                //var generatedLauncher = GenerateLauncher(namespaceName, className, outputDirectory);
-                //allSyntaxTrees.Add(generatedLauncher);
             }
 
-            //var generatedLauncher = GenerateLauncher("MiniBench.Demo", "SampleDeadCodeElimination", outputDirectory);
-            var generatedLauncher = GenerateLauncher("MiniBench.Demo", "SampleSlowDelegates", outputDirectory);
-            //var generatedLauncher = GenerateLauncher("MiniBench.Demo", "SampleStopwatchTimestamp", outputDirectory);
-            //var generatedLauncher = GenerateLauncher("MiniBench.Demo", "SampleConstantFolding", outputDirectory);
-            //var generatedLauncher = GenerateLauncher("MiniBench.Demo", "JonSkeetReadonlyFields", outputDirectory);
+            var generatedLauncher = GenerateLauncher(generatedCodeDirectory);
             allSyntaxTrees.Add(generatedLauncher);
 
             CompileAndEmitCode(allSyntaxTrees, emitToDisk: true);
@@ -113,9 +107,9 @@ namespace MiniBench
             return generatedRunners;
         }
 
-        private SyntaxTree GenerateLauncher(string namespaceName, string className, string outputDirectory)
+        private SyntaxTree GenerateLauncher(string outputDirectory)
         {
-            var generatedLauncher = BenchmarkTemplate.ProcessLauncherTemplate(namespaceName, className);
+            var generatedLauncher = BenchmarkTemplate.ProcessLauncherTemplate();
             var fileName = "Generated_Launcher.cs";
             var outputFileName = Path.Combine(outputDirectory, fileName);
             var codeGenTimer = Stopwatch.StartNew();
@@ -212,17 +206,6 @@ namespace MiniBench
             }
 
             return standardReferences;
-        }
-
-        private static string GetEmbeddedResource(string resourceFullPath)
-        {
-            var assembly = Assembly.GetExecutingAssembly();
-            using (Stream stream = assembly.GetManifestResourceStream(resourceFullPath))
-            using (StreamReader reader = new StreamReader(stream))
-            {
-                string result = reader.ReadToEnd();
-                return result;
-            }
         }
 
         private static IList<T> NodesOfType<T>(SyntaxTree tree)
