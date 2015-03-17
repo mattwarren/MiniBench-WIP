@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using MiniBench.Core.Profiling;
 
 namespace MiniBench.Core
 {
@@ -13,6 +14,6 @@ namespace MiniBench.Core
 
         ReadOnlyCollection<string> Categories { get; }
 
-        BenchmarkResult RunTest(TimeSpan warmupTime, TimeSpan targetTime);
+        BenchmarkResult RunTest(TimeSpan warmupTime, TimeSpan targetTime, Profiler profiler);
     }
 }

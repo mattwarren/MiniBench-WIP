@@ -2,6 +2,7 @@
 using System.Reflection;
 using System.Security.Policy;
 using System.Text.RegularExpressions;
+using MiniBench.Core.Profiling;
 
 namespace MiniBench.Core
 {
@@ -51,15 +52,17 @@ namespace MiniBench.Core
                     continue;
                 }
 
+                Profiler profiler = new Profiler();
+
                 // TODO review this list of App Domain gotchas and see if we will run into any of them https://github.com/fixie/fixie/issues/8
                 AppDomain domain = AppDomain.CreateDomain("MiniBench runner", new Evidence(), Environment.CurrentDirectory, Environment.CurrentDirectory, false);
                 // TODO complete this App Domain stuff, what Type do we want to load into the App Domain?
                 //BenchmarkResult loader = CreateInstance<IBenchmarkTarget>(domain);
-                //BenchmarkResult result = obj.RunTest(TimeSpan.FromMilliseconds(2000), TimeSpan.FromMilliseconds(2000));
-                BenchmarkResult result = obj.RunTest(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
-                //BenchmarkResult result = obj.RunTest(TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(5));
+                BenchmarkResult result = obj.RunTest(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), profiler);
                 //Console.WriteLine(result);
                 Console.WriteLine();
+
+                profiler.PrintOverallResults();
             }
         }
 

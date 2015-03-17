@@ -88,6 +88,27 @@
     <EmbeddedResource Include="..\MiniBench.Core\Utils.cs">
       <Link>Core\Utils.cs</Link>
     </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\Profiling\IInternalProfiler.cs">
+      <Link>Profiling\IInternalProfiler.cs</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\Profiling\GCProfiler.cs">
+      <Link>Profiling\GCProfiler.cs</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\Profiling\Profiler.cs">
+      <Link>Profiling\Profiler.cs</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\Profiling\ProfilerResult.cs">
+      <Link>Profiling\ProfilerResult.cs</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\Profiling\AggregatedProfilerResult.cs">
+      <Link>Profiling\AggregatedProfilerResult.cs</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\Profiling\AggregationMode.cs">
+      <Link>Profiling\AggregationMode.cs</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\Profiling\ListExtensions.cs">
+      <Link>Profiling\ListExtensions.cs</Link>
+    </EmbeddedResource>
     <Compile Include="BenchmarkTemplate.cs" />
     <Compile Include="CodeGenerator.cs" />
     <Compile Include="Program.cs" />

@@ -69,7 +69,7 @@ namespace MiniBench
             CompileAndEmitCode(allSyntaxTrees, emitToDisk: true);
         }
 
-        private List<SyntaxTree> GenerateRunners(IList<MethodDeclarationSyntax> methods, string namespaceName, string className, string outputDirectory)
+        private IEnumerable<SyntaxTree> GenerateRunners(IEnumerable<MethodDeclarationSyntax> methods, string namespaceName, string className, string outputDirectory)
         {
             var benchmarkAttribute = typeof(BenchmarkAttribute).Name.Replace("Attribute", "");
             var validMethods = methods.Where(m => m.Modifiers.Any(mod => mod.CSharpKind() == SyntaxKind.PublicKeyword))
@@ -126,13 +126,14 @@ namespace MiniBench
             return generatedLauncherTree;
         }
 
-        private List<SyntaxTree> GenerateEmbeddedCode()
+        private IEnumerable<SyntaxTree> GenerateEmbeddedCode()
         {
             var embeddedCodeTrees = new List<SyntaxTree>();
             var assembly = Assembly.GetExecutingAssembly();
             foreach (var codeFile in assembly.GetManifestResourceNames())
             {
-                if (codeFile.StartsWith("MiniBench.Core.") == false)
+                if (codeFile.StartsWith("MiniBench.Core.") == false &&
+                    codeFile.StartsWith("MiniBench.Profiling.") == false)
                     continue;
 
                 using (Stream stream = assembly.GetManifestResourceStream(codeFile))
@@ -147,9 +148,8 @@ namespace MiniBench
             return embeddedCodeTrees;
         }
 
-        private void CompileAndEmitCode(List<SyntaxTree> allSyntaxTrees, bool emitToDisk)
+        private void CompileAndEmitCode(IEnumerable<SyntaxTree> allSyntaxTrees, bool emitToDisk)
         {
-            // TODO Maybe re-write this using the Fluent-API, as shown here http://roslyn.codeplex.com/discussions/541557
             var compilationOptions = new CSharpCompilationOptions(
                                             outputKind: OutputKind.ConsoleApplication,
                                             mainTypeName: "MiniBench.Benchmarks.Program",
@@ -176,7 +176,7 @@ namespace MiniBench
             }
         }
 
-        private IList<MetadataReference> GetRequiredReferences()
+        private IEnumerable<MetadataReference> GetRequiredReferences()
         {
             var standardReferences = new List<MetadataReference>
                 { 
@@ -196,7 +196,7 @@ namespace MiniBench
                     //MetadataReference.CreateFromAssembly(Assembly.LoadFrom(@"C:\Windows\Microsoft.NET\Framework\v2.0.50727\mscorlib.dll")),
 
                     // In here we include any other parts of the .NET framework that we need
-                    MetadataReference.CreateFromAssembly(typeof(System.Diagnostics.Stopwatch).Assembly),
+                    MetadataReference.CreateFromAssembly(typeof(System.Diagnostics.Stopwatch).Assembly),                   
                 };
 
             // Now add the references we need from the .csproj file

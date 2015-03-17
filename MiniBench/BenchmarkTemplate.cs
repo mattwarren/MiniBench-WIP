@@ -11,6 +11,7 @@
 
         private static string benchmarkHarnessTemplate =
 @"using MiniBench.Core;
+using MiniBench.Core.Profiling;
 using ##NAMESPACE-NAME##;
 using System;
 using System.Diagnostics;
@@ -40,7 +41,7 @@ namespace MiniBench.Benchmarks
             categories = new ReadOnlyCollection<string>(new String [] { ""Testing"" } );
         }
 
-        public BenchmarkResult RunTest(TimeSpan warmupTime, TimeSpan targetTime)
+        public BenchmarkResult RunTest(TimeSpan warmupTime, TimeSpan targetTime, Profiler profiler)
         {
             try
             {
@@ -81,6 +82,7 @@ namespace MiniBench.Benchmarks
                 int batches = 4;
                 for (int batch = 0; batch < batches; batch++)
                 {
+                    profiler.BeforeIteration();
                     stopwatch.Reset();
                     stopwatch.Start();
                     for (long iteration = 0; iteration < iterations; iteration++)
@@ -88,9 +90,12 @@ namespace MiniBench.Benchmarks
                         ##BENCHMARK-METHOD-CALL##;
                     }
                     stopwatch.Stop();
+                    profiler.AfterIteration();
 
                     Console.WriteLine(""Benchmark: {0,12:N0} iterations in {1,10:N3} ms, {2,6:N3} ns/op"", 
                                         iterations, stopwatch.Elapsed.TotalMilliseconds, Utils.TicksToNanoseconds(stopwatch) / iterations);
+
+                    profiler.PrintIterationResults();
                 }
 
                 return BenchmarkResult.ForSuccess(this, iterations, stopwatch.Elapsed);
@@ -133,6 +138,7 @@ namespace MiniBench.Benchmarks
             }
             else
             {
+                // Print out all the available benchmarks
                 Assembly assembly = Assembly.GetExecutingAssembly();
                 foreach (Type type in assembly.GetTypes())
                 {

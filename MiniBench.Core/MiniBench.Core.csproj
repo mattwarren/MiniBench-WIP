@@ -21,6 +21,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -29,6 +30,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -41,6 +43,13 @@
     <Compile Include="IBenchmarkTarget.cs" />
     <Compile Include="Options.cs" />
     <Compile Include="OptionsBuilder.cs" />
+    <Compile Include="Profiling\AggregatedProfilerResult.cs" />
+    <Compile Include="Profiling\AggregationMode.cs" />
+    <Compile Include="Profiling\GCProfiler.cs" />
+    <Compile Include="Profiling\IInternalProfiler.cs" />
+    <Compile Include="Profiling\ListExtensions.cs" />
+    <Compile Include="Profiling\Profiler.cs" />
+    <Compile Include="Profiling\ProfilerResult.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Runner.cs" />
     <Compile Include="Utils.cs" />
