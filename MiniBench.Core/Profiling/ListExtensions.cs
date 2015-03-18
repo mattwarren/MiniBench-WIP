@@ -3,8 +3,7 @@
 namespace MiniBench.Core.Profiling
 {
     /// <summary>
-    /// We have this because we DON'T want to just use LINQ,
-    /// This is because we want to target .NET 2.0 and upwards
+    /// We have this because we DON'T want to use LINQ (we want to target .NET 2.0 and upwards)
     /// </summary>
     internal static class ListExtensions
     {

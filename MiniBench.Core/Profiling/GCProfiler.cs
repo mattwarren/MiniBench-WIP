@@ -11,7 +11,7 @@ namespace MiniBench.Core.Profiling
         public string SummaryText()
         {
             return
-                "Calculates the GC Collection Counts for Generations 0, 1 and 2." + 
+                "GCProfiler - Calculates the GC Collection Counts for Generations 0, 1 and 2. " + 
                 "Also calculates the memory usage (per iteration) and the peak during the entire run";
         }
 
@@ -35,8 +35,8 @@ namespace MiniBench.Core.Profiling
                     new ProfilerResult("GC.Gen0", gen0, "counts", AggregationMode.Sum),
                     new ProfilerResult("GC.Gen1", gen1, "counts", AggregationMode.Sum),
                     new ProfilerResult("GC.Gen2", gen2, "counts", AggregationMode.Sum),
-                    new ProfilerResult("Memory Usage", memoryAfter - memoryBefore, "bytes", AggregationMode.Max),
-                    new ProfilerResult("Memory Peak", memoryAfter, "bytes", AggregationMode.Max),
+                    new ProfilerResult("Memory.Usage", memoryAfter - memoryBefore, "bytes", AggregationMode.Max),
+                    new ProfilerResult("Memory.Peak", memoryAfter, "bytes", AggregationMode.Max),
                 };
         }
     }

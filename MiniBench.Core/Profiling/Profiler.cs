@@ -5,7 +5,7 @@ namespace MiniBench.Core.Profiling
 {
     public class Profiler
     {
-        private readonly Dictionary<IInternalProfiler, AggregatedProfilerResult []> profilers =
+        internal readonly Dictionary<IInternalProfiler, AggregatedProfilerResult []> Profilers =
             new Dictionary<IInternalProfiler, AggregatedProfilerResult []>
             {
                 { new GCProfiler(), null }
@@ -13,7 +13,7 @@ namespace MiniBench.Core.Profiling
 
         public void BeforeIteration()
         {
-            foreach (KeyValuePair<IInternalProfiler, AggregatedProfilerResult []> profiler in profilers)
+            foreach (KeyValuePair<IInternalProfiler, AggregatedProfilerResult []> profiler in Profilers)
             {
                 profiler.Key.BeforeIteration();
             }
@@ -23,12 +23,13 @@ namespace MiniBench.Core.Profiling
         {
             try
             {
-                IInternalProfiler [] keysCopy = new IInternalProfiler[profilers.Keys.Count];
-                profilers.Keys.CopyTo(keysCopy, 0);
+
+                IInternalProfiler [] keysCopy = new IInternalProfiler[Profilers.Keys.Count];
+                Profilers.Keys.CopyTo(keysCopy, 0);
                 foreach (IInternalProfiler profiler in keysCopy)
                 {
                     IList<ProfilerResult> results = profiler.AfterIteration();
-                    if (profilers[profiler] == null && results.Count > 0)
+                    if (Profilers[profiler] == null && results.Count > 0)
                     {
                         AggregatedProfilerResult[] aggregatedResult = new AggregatedProfilerResult[results.Count];
                         for (int i = 0; i < results.Count; i++)
@@ -41,13 +42,13 @@ namespace MiniBench.Core.Profiling
                             );
                             aggregatedResult[i].RawResults.Add(results[i].Value);
                         }
-                        profilers[profiler] = aggregatedResult;
+                        Profilers[profiler] = aggregatedResult;
                     }
                     else
                     {
                         for (int i = 0; i < results.Count; i++)
                         {
-                            profilers[profiler][i].RawResults.Add(results[i].Value);
+                            Profilers[profiler][i].RawResults.Add(results[i].Value);
                         }
                     }
                 }
@@ -64,14 +65,14 @@ namespace MiniBench.Core.Profiling
         {
             try
             {
-                foreach (KeyValuePair<IInternalProfiler, AggregatedProfilerResult[]> profiler in profilers)
+                foreach (KeyValuePair<IInternalProfiler, AggregatedProfilerResult[]> profiler in Profilers)
                 {
-                    for (int i = 0; i < profiler.Value.Length; i++)
-                    {
-                        AggregatedProfilerResult result = profiler.Value[i];
-                        Console.WriteLine("Result {0,30} {1:N0} {2} ({3})",
-                                          result.Name, result.RawResults[result.RawResults.Count - 1], result.Units, result.Mode);
-                    }
+                    Array.ForEach(profiler.Value, result =>
+                        {
+                            Console.WriteLine("Result {0,36}: {1:N0} {2} ({3})", result.Name,
+                                              result.RawResults[result.RawResults.Count - 1], result.Units, result.Mode);
+
+                        });
                 }
             }
             catch (Exception ex)
@@ -86,14 +87,13 @@ namespace MiniBench.Core.Profiling
         {
             try
             {
-                foreach (KeyValuePair<IInternalProfiler, AggregatedProfilerResult[]> profiler in profilers)
+                foreach (KeyValuePair<IInternalProfiler, AggregatedProfilerResult[]> profiler in Profilers)
                 {
-                    for (int i = 0; i < profiler.Value.Length; i++)
-                    {
-                        AggregatedProfilerResult result = profiler.Value[i];
-                        Console.WriteLine("Aggregated Result {0,30} {1:N0} {2} ({3})",
-                                          result.Name, result.AggregatedValue, result.Units, result.Mode);
-                    }
+                    Array.ForEach(profiler.Value, result =>
+                        {
+                            Console.WriteLine("Aggregated Result {0,25}: {1:N0} {2} ({3})",
+                                              result.Name, result.AggregatedValue, result.Units, result.Mode);
+                        });
                 }
             }
             catch (Exception ex)

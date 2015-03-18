@@ -167,6 +167,8 @@ namespace MiniBench
             {
                 Console.WriteLine("\nCurrent directory: " + Environment.CurrentDirectory);
                 var codeEmitToDiskTimer = Stopwatch.StartNew();
+                // TODO fix this IOException (happens if the file is still being used whilst we are trying to "re-write" it)
+                //  Unhandled Exception: System.IO.IOException: The process cannot access the file '....MiniBench.Demo.dll' because it is being used by another process.
                 var emitToDiskResult = compilation.Emit(outputPath: projectSettings.OutputFileName + projectSettings.OutputFileExtension,
                                                         pdbPath: projectSettings.OutputFileName + ".pdb",
                                                         xmlDocumentationPath: projectSettings.OutputFileName + ".xml");
