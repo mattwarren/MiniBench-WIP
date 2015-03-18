@@ -1,2 +1,2 @@
 param($installPath, $toolsPath, $package, $project)
-$project.Properties.Item("PostBuildEvent").Value = """`$(TargetDir)MiniBench.exe"" ""`$(ProjectPath)"""
+$project.Properties.Item("PostBuildEvent").Value = """$installPath\tools\MiniBench.exe"" ""`$(ProjectPath)"""

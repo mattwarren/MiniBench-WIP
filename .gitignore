@@ -215,3 +215,6 @@ pip-log.txt
 
 #Mr Developer
 .mr.developer.cfg
+
+# Don't check-in NuGet Packages (they should be re-built after each build)
+.nupkg

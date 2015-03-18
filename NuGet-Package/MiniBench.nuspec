@@ -14,14 +14,17 @@
         <releaseNotes>Summary of changes made in this release of the package.</releaseNotes>
         <copyright>Copyright 2015</copyright>
         <tags>Benchmarking Micro-Benchmark</tags>
-        <dependencies>
-            <dependency id="Microsoft.CodeAnalysis.CSharp" version="1.0.0-beta1-20141031-01" />
-            <dependency id="System.Reflection.Metadata" version="1.0.17-beta" />
-        </dependencies>
     </metadata>
     <files>
-        <file src="..\MiniBench\bin\Release\MiniBench.exe" target="lib\net45\MiniBench.exe" />
-        <file src="..\MiniBench.Core\bin\Release\MiniBench.Core.dll" target="lib\net45\MiniBench.Core.dll" />
+        <file src="..\MiniBench.Core\bin\Release\MiniBench.Core.dll" target="lib\MiniBench.Core.dll" />
+        <file src="..\MiniBench\bin\Release\MiniBench.exe" target="tools\MiniBench.exe" />
+        <!-- Make sure we include the bits of the Roslyn Library we need -->
+        <file src="..\packages\Microsoft.CodeAnalysis.Common.1.0.0-beta1-20141031-01\lib\net45\Microsoft.CodeAnalysis.dll" target="tools\Microsoft.CodeAnalysis.dll" />
+        <file src="..\packages\Microsoft.CodeAnalysis.Common.1.0.0-beta1-20141031-01\lib\net45\Microsoft.CodeAnalysis.Desktop.dll" target="tools\Microsoft.CodeAnalysis.Desktop.dll" />
+        <file src="..\packages\Microsoft.CodeAnalysis.CSharp.1.0.0-beta1-20141031-01\lib\net45\Microsoft.CodeAnalysis.CSharp.dll" target="tools\Microsoft.CodeAnalysis.CSharp.dll" />
+        <file src="..\packages\Microsoft.CodeAnalysis.CSharp.1.0.0-beta1-20141031-01\lib\net45\Microsoft.CodeAnalysis.CSharp.Desktop.dll" target="tools\Microsoft.CodeAnalysis.CSharp.Desktop.dll" />
+        <file src="..\packages\System.Collections.Immutable.1.1.32-beta\lib\portable-net45+win8+wp8+wpa81\System.Collections.Immutable.dll" target="tools\System.Collections.Immutable.dll" />
+        <file src="..\packages\System.Reflection.Metadata.1.0.17-beta\lib\portable-net45+win8\System.Reflection.Metadata.dll" target="tools\System.Reflection.Metadata.dll" />
         <file src="content\SampleBenchmark.cs.pp" target="content\SampleBenchmark.cs.pp" />
         <file src="tools\install.ps1" target="tools\install.ps1" />
     </files>
