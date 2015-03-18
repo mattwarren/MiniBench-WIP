@@ -10,10 +10,6 @@ namespace MiniBench.Core
     {
         private readonly Options options;
 
-        private Runner()
-        {
-        }
-
         public Runner(Options options)
         {
             this.options = options;
@@ -59,10 +55,10 @@ namespace MiniBench.Core
                 // TODO complete this App Domain stuff, what Type do we want to load into the App Domain?
                 //BenchmarkResult loader = CreateInstance<IBenchmarkTarget>(domain);
                 BenchmarkResult result = obj.RunTest(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), profiler);
-                //Console.WriteLine(result);
-                Console.WriteLine();
+                //Console.WriteLine(result);                
 
                 profiler.PrintOverallResults();
+                Console.WriteLine();
             }
         }
 

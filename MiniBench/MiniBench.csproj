@@ -109,6 +109,12 @@
     <EmbeddedResource Include="..\MiniBench.Core\Profiling\ListExtensions.cs">
       <Link>Profiling\ListExtensions.cs</Link>
     </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\MonoOptions.cs">
+      <Link>Core\MonoOptions.cs</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MiniBench.Core\CommandLineArgs.cs">
+      <Link>Core\CommandLineArgs.cs</Link>
+    </EmbeddedResource>
     <Compile Include="BenchmarkTemplate.cs" />
     <Compile Include="CodeGenerator.cs" />
     <Compile Include="Program.cs" />

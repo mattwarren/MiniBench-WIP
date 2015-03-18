@@ -40,7 +40,9 @@
     <Compile Include="BenchmarkResult.cs" />
     <Compile Include="Blackhole.cs" />
     <Compile Include="CategoryAttribute.cs" />
+    <Compile Include="CommandLineArgs.cs" />
     <Compile Include="IBenchmarkTarget.cs" />
+    <Compile Include="MonoOptions.cs" />
     <Compile Include="Options.cs" />
     <Compile Include="OptionsBuilder.cs" />
     <Compile Include="Profiling\AggregatedProfilerResult.cs" />

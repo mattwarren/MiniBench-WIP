@@ -120,7 +120,9 @@ namespace MiniBench.Benchmarks
         private static string benchmarkLauncherTemplate =
 @"using System;
 using System.Reflection;
+using System.Collections.Generic;
 using MiniBench.Core;
+using MiniBench.Core.Profiling;
 
 namespace MiniBench.Benchmarks
 {
@@ -128,15 +130,12 @@ namespace MiniBench.Benchmarks
     {
         static void Main(string[] args)
         {
+            CommandLineArgs commandLineArgs = new CommandLineArgs(args);
+            if (commandLineArgs.ShouldExit)
+                return;
+
             string benchmarkPrefix = ""Generated_Runner_"";
-            if (args.Length > 0)
-            {
-                Options opt = new OptionsBuilder()
-                                    .Include(args[0])
-                                    .Build();
-                new Runner(opt).Run();
-            }
-            else
+            if (commandLineArgs.ListBenchmarks)
             {
                 // Print out all the available benchmarks
                 Assembly assembly = Assembly.GetExecutingAssembly();
@@ -149,6 +148,23 @@ namespace MiniBench.Benchmarks
                                                    .Replace(""_"", "".""));
                     }
                 }
+                return;
+            }
+            else if (commandLineArgs.ListProfilers)
+            {
+                Profiler profiler = new Profiler();
+                foreach (KeyValuePair<IInternalProfiler, AggregatedProfilerResult []> internalProfiler in profiler.Profilers)
+                {
+                    Console.WriteLine(internalProfiler.Key.SummaryText());
+                }
+                return;
+            }
+            else
+            {
+                Options opt = new OptionsBuilder()
+                                    .Include(commandLineArgs.BenchmarksToRun)
+                                    .Build();
+                new Runner(opt).Run();
             }
 
             // TODO put in here any attributes that control the benchmark parameters
