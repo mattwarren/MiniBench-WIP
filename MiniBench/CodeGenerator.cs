@@ -1,7 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using MiniBench.Core;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -71,7 +70,8 @@ namespace MiniBench
 
         private IEnumerable<SyntaxTree> GenerateRunners(IEnumerable<MethodDeclarationSyntax> methods, string namespaceName, string className, string outputDirectory)
         {
-            var benchmarkAttribute = typeof(BenchmarkAttribute).Name.Replace("Attribute", "");
+            //var benchmarkAttribute = typeof(BenchmarkAttribute).Name.Replace("Attribute", "");
+            var benchmarkAttribute = "BenchmarkAttribute";
             var validMethods = methods.Where(m => m.Modifiers.Any(mod => mod.CSharpKind() == SyntaxKind.PublicKeyword))
                                       .Where(m => m.AttributeLists.SelectMany(atrl => atrl.Attributes)
                                                                   .Any(atr => atr.Name.ToString() == benchmarkAttribute))
@@ -198,12 +198,13 @@ namespace MiniBench
                     //MetadataReference.CreateFromAssembly(Assembly.LoadFrom(@"C:\Windows\Microsoft.NET\Framework\v2.0.50727\mscorlib.dll")),
 
                     // In here we include any other parts of the .NET framework that we need
-                    MetadataReference.CreateFromAssembly(typeof(System.Diagnostics.Stopwatch).Assembly),                   
+                    MetadataReference.CreateFromAssembly(typeof(System.Diagnostics.Stopwatch).Assembly),
                 };
 
             // Now add the references we need from the .csproj file
             foreach (var reference in projectSettings.References)
             {
+                Console.WriteLine("Processing: {0} ({1}) in {2}", reference.Item2, reference.Item1, projectSettings.RootFolder);
                 standardReferences.Add(MetadataReference.CreateFromFile(Path.Combine(projectSettings.RootFolder, reference.Item2)));
             }
 
