@@ -67,12 +67,14 @@ namespace MiniBench.Core.Profiling
             {
                 foreach (KeyValuePair<IInternalProfiler, AggregatedProfilerResult[]> profiler in Profilers)
                 {
-                    Array.ForEach(profiler.Value, result =>
-                        {
-                            Console.WriteLine("Result {0,36}: {1:N0} {2} ({3})", result.Name,
-                                              result.RawResults[result.RawResults.Count - 1], result.Units, result.Mode);
-
-                        });
+                    if (profiler.Value != null)
+                    {
+                        Array.ForEach(profiler.Value, result =>
+                            {
+                                Console.WriteLine("Result {0,36}: {1:N0} {2} ({3})", result.Name,
+                                                  result.RawResults[result.RawResults.Count - 1], result.Units, result.Mode);
+                            });
+                    }
                 }
             }
             catch (Exception ex)
@@ -89,11 +91,14 @@ namespace MiniBench.Core.Profiling
             {
                 foreach (KeyValuePair<IInternalProfiler, AggregatedProfilerResult[]> profiler in Profilers)
                 {
-                    Array.ForEach(profiler.Value, result =>
-                        {
-                            Console.WriteLine("Aggregated Result {0,25}: {1:N0} {2} ({3})",
-                                              result.Name, result.AggregatedValue, result.Units, result.Mode);
-                        });
+                    if (profiler.Value != null)
+                    {
+                        Array.ForEach(profiler.Value, result =>
+                            {
+                                Console.WriteLine("Aggregated Result {0,25}: {1:N0} {2} ({3})",
+                                                  result.Name, result.AggregatedValue, result.Units, result.Mode);
+                            });
+                    }
                 }
             }
             catch (Exception ex)

@@ -41,7 +41,7 @@ namespace MiniBench.Benchmarks
             categories = new ReadOnlyCollection<string>(new String [] { ""Testing"" } );
         }
 
-        public BenchmarkResult RunTest(TimeSpan warmupTime, TimeSpan targetTime, Profiler profiler)
+        public BenchmarkResult RunTest(Options options, Profiler profiler)
         {
             try
             {
@@ -61,7 +61,7 @@ namespace MiniBench.Benchmarks
 
                 Stopwatch stopwatch = new Stopwatch();
                 long warmupIterations = 0;
-                long ticks = (long)(Stopwatch.Frequency * warmupTime.TotalSeconds);
+                long ticks = (long)(Stopwatch.Frequency * options.WarmupTime.TotalSeconds);
                 stopwatch.Reset();
                 stopwatch.Start();
                 warmupIterations = 0;
@@ -74,13 +74,12 @@ namespace MiniBench.Benchmarks
                 Console.WriteLine(""Warmup:    {0,12:N0} iterations in {1,10:N3} ms, {2,6:N3} ns/op"", 
                                     warmupIterations, stopwatch.Elapsed.TotalMilliseconds, Utils.TicksToNanoseconds(stopwatch) / warmupIterations);
 
-                double ratio = targetTime.TotalSeconds / stopwatch.Elapsed.TotalSeconds;
+                double ratio = options.TargetTime.TotalSeconds / stopwatch.Elapsed.TotalSeconds;
                 long iterations = (long)(warmupIterations * ratio);
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
 
-                int batches = 4;
-                for (int batch = 0; batch < batches; batch++)
+                for (int batch = 0; batch < options.Runs; batch++)
                 {
                     profiler.BeforeIteration();
                     stopwatch.Reset();

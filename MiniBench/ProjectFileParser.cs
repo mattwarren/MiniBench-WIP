@@ -21,6 +21,7 @@ namespace MiniBench
 
             return new ProjectSettings
             (
+                csprojPath,
                 Path.GetDirectoryName(csprojPath),
                 GetOutputFileName(xmldoc, mgr),
                 GetOutputFileExtension(xmldoc, mgr),
@@ -59,29 +60,30 @@ namespace MiniBench
 
         private LanguageVersion GetTargetFrameworkVersion(XmlDocument xmldoc, XmlNamespaceManager mgr)
         {
+            // Default to CSharp2
+            LanguageVersion languageVersion = LanguageVersion.CSharp2;
             XmlNode item = xmldoc.SelectSingleNode("//x:TargetFrameworkVersion", mgr);
-            Console.WriteLine("TargetFrameworkVersion: " + (item != null ? item.InnerText : "<NULL>"));
             if (item != null)
             {
                 if (item.InnerText.StartsWith("v1."))
-                    return LanguageVersion.CSharp1;
+                    languageVersion = LanguageVersion.CSharp1;
                 else if (item.InnerText.StartsWith("v2."))
-                    return LanguageVersion.CSharp2;
+                    languageVersion = LanguageVersion.CSharp2;
                 else if (item.InnerText.StartsWith("v3."))
-                    return LanguageVersion.CSharp3;
+                    languageVersion = LanguageVersion.CSharp3;
                 else if (item.InnerText.StartsWith("v4."))
-                    return LanguageVersion.CSharp4;
+                    languageVersion = LanguageVersion.CSharp4;
                 else if (item.InnerText.StartsWith("v5."))
-                    return LanguageVersion.CSharp5;
+                    languageVersion = LanguageVersion.CSharp5;
                 else if (item.InnerText.StartsWith("v6."))
-                    return LanguageVersion.CSharp6;
+                    languageVersion = LanguageVersion.CSharp6;
             }
 
-            // Default to CSharp2
-            return LanguageVersion.CSharp2;
+            Console.WriteLine("TargetFrameworkVersion: {0} -> {1}", (item != null ? item.InnerText : "<NULL>"), languageVersion);
+            return languageVersion;
         }
 
-        private IList<String> GetSourceFiles(XmlDocument xmldoc, XmlNamespaceManager mgr)
+        private IEnumerable<string> GetSourceFiles(XmlDocument xmldoc, XmlNamespaceManager mgr)
         {
             var sourceFiles = new List<String>();
             Console.WriteLine("Source Files:");
@@ -97,7 +99,7 @@ namespace MiniBench
             return sourceFiles;
         }
 
-        private IList<Tuple<String, String>> GetReferences(XmlDocument xmldoc, XmlNamespaceManager mgr)
+        private IEnumerable<Tuple<string, string>> GetReferences(XmlDocument xmldoc, XmlNamespaceManager mgr)
         {
             var references = new List<Tuple<String, String>>();
             // Why doesn't "//x:ItemGroup/Reference" work, to find Reference Nodes under ItemGroup nodes?
@@ -108,11 +110,9 @@ namespace MiniBench
                 if (includeAttrribute == null || item.ChildNodes.Count == 0)
                     continue;
 
-                foreach (XmlNode childNode in item.ChildNodes)
-                {
-                    Console.WriteLine("\t" + includeAttrribute.Value + " " + childNode.InnerText);
-                    references.Add(Tuple.Create(includeAttrribute.Value, childNode.InnerText));
-                }
+                XmlNode hintPath = includeAttrribute.SelectSingleNode("//x:HintPath", mgr);
+                Console.WriteLine("\t{0} {1}", includeAttrribute.Value, hintPath != null ? hintPath.InnerText : "<null>");
+                references.Add(Tuple.Create(includeAttrribute.Value, hintPath != null ? hintPath.InnerText : null));
             }
             return references;
         }

@@ -4,7 +4,6 @@ namespace MiniBench.Core
 {
     public class Options
     {
-        //Feature 'automatically implemented properties' is not available in C# 2.  Please use language version 3 or greater.
         private readonly Type benchmarkType;
         public Type BenchmarkType { get { return benchmarkType; } }
 
@@ -14,20 +13,33 @@ namespace MiniBench.Core
         private readonly string benchmarkRegex;
         public string BenchmarkRegex { get { return benchmarkRegex; } }
 
+        public int WarmupRuns { get; private set; }
+        public int Runs { get; private set; }
+
+        private TimeSpan warmupTime = TimeSpan.FromSeconds(10);
+        public TimeSpan WarmupTime { get { return warmupTime; } }
+
+        private TimeSpan targetTime = TimeSpan.FromSeconds(10);
+        public TimeSpan TargetTime { get { return warmupTime; } }
+
         private static readonly string GeneratedPrefix = "Generated_Runner";
 
-        public Options(Type benchmarkType)
+        public Options(Type benchmarkType, int warmupRuns, int runs)
         {
             this.benchmarkType = benchmarkType;
             this.benchmarkPrefix = string.Format("{0}_{1}_{2}",
                                             GeneratedPrefix,
                                             benchmarkType.Namespace.Replace('.', '_'),
                                             benchmarkType.Name);
+            WarmupRuns = warmupRuns;
+            Runs = runs;
         }
 
-        public Options(String benchmarkRegex)
+        internal Options(String benchmarkRegex, int warmupRuns, int runs)
         {
             this.benchmarkRegex = benchmarkRegex;
+            WarmupRuns = warmupRuns;
+            Runs = runs;
         }
     }
 }

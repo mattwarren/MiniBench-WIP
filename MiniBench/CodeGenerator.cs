@@ -8,7 +8,6 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-using Microsoft.CodeAnalysis.Emit;
 
 namespace MiniBench
 {
@@ -48,6 +47,7 @@ namespace MiniBench
             var allSyntaxTrees = new List<SyntaxTree>(GenerateEmbeddedCode());
             foreach (var file in projectSettings.SourceFiles.Where(f => f.StartsWith("Properties\\") == false))
             {
+                Console.WriteLine("Processing file: " + file);
                 var code = File.ReadAllText(Path.Combine(projectSettings.RootFolder, file));
                 var benchmarkTree = CSharpSyntaxTree.ParseText(code, options: parseOptions);
 
@@ -73,8 +73,22 @@ namespace MiniBench
 
         private IEnumerable<SyntaxTree> GenerateRunners(IEnumerable<MethodDeclarationSyntax> methods, string namespaceName, string className, string outputDirectory)
         {
+            var methodWithAttributes = methods.Select(m => new
+                {
+                    Name = m.Identifier.ToString(),
+                    ReturnType = m.ReturnType,
+                    Blackhole = ShouldGenerateBlackhole(m.ReturnType),
+                    //ReturnTypeType = m.ReturnType.GetType().Name,
+                    //ReturnPredefinedTypeSyntax = m.ReturnType as PredefinedTypeSyntax != null ? 
+                    //                            (m.ReturnType as PredefinedTypeSyntax).Keyword.Kind().ToString() : "<UNKNOWN>",
+                    //ReturnIdentifierNameSyntax = m.ReturnType as IdentifierNameSyntax != null ?
+                    //                            (m.ReturnType as IdentifierNameSyntax).Kind().ToString() : "<UNKNOWN>",
+                    Attributes = String.Join(", ", m.AttributeLists.SelectMany(atrl => atrl.Attributes.Select(atr => atr.Name.ToString())))
+                });
+            Console.WriteLine("Methods:\n  " + String.Join("\n  ", methodWithAttributes));
+
             //var benchmarkAttribute = typeof(BenchmarkAttribute).Name.Replace("Attribute", "");
-            var benchmarkAttribute = "BenchmarkAttribute";
+            var benchmarkAttribute = "Benchmark";
             var validMethods = methods.Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)))
                                       .Where(m => m.AttributeLists.SelectMany(atrl => atrl.Attributes)
                                                                   .Any(atr => atr.Name.ToString() == benchmarkAttribute))
@@ -93,8 +107,8 @@ namespace MiniBench
                 var outputFileName = Path.Combine(outputDirectory, fileName);
 
                 var codeGenTimer = Stopwatch.StartNew();
-                var returnType = method.ReturnType as PredefinedTypeSyntax;
-                var generateBlackhole = returnType.Keyword.IsKind(SyntaxKind.VoidKeyword) == false;
+                var generateBlackhole = ShouldGenerateBlackhole(method.ReturnType);
+                
                 var generatedBenchmark = BenchmarkTemplate.ProcessCodeTemplates(namespaceName, className, methodName, generatedClassName, generateBlackhole);
                 var generatedRunnerTree = CSharpSyntaxTree.ParseText(generatedBenchmark, options: parseOptions, path: outputFileName, encoding: defaultEncoding);
                 generatedRunners.Add(generatedRunnerTree);
@@ -108,6 +122,22 @@ namespace MiniBench
                 Console.WriteLine("Generated file: {0}\n", fileName);
             }
             return generatedRunners;
+        }
+
+        private bool ShouldGenerateBlackhole(TypeSyntax returnType)
+        {
+            // If the method returns void, double, etc, then the type will be "PredefinedTypeSyntax"
+            var predefinedTypeSyntax = returnType as PredefinedTypeSyntax;
+            if (predefinedTypeSyntax != null && predefinedTypeSyntax.Keyword.IsKind(SyntaxKind.VoidKeyword) == false)
+                return true;
+
+            // If the method returns DateTime, String, etc, then the type will be "IdentifierNameSyntax"
+            var identifierNameSyntax = returnType as IdentifierNameSyntax;
+            if (identifierNameSyntax != null && identifierNameSyntax.IsKind(SyntaxKind.VoidKeyword) == false)
+                return true;
+
+            // If we don't know, return false?
+            return false;
         }
 
         private SyntaxTree GenerateLauncher(string outputDirectory)
