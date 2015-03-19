@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using Microsoft.CodeAnalysis.Emit;
 
 namespace MiniBench
 {
@@ -25,8 +26,10 @@ namespace MiniBench
         {
             this.projectSettings = projectSettings;
 
-            parseOptions = new CSharpParseOptions(kind: SourceCodeKind.Regular, 
-                                    languageVersion: projectSettings.TargetFrameworkVersion);
+            //parseOptions = new CSharpParseOptions(kind: SourceCodeKind.Regular, 
+            //                        languageVersion: projectSettings.TargetFrameworkVersion);
+            // We don't need to target .NET 2.0 language features, as long as we build a file that TARGETS the .NET 2.0 Framework
+            parseOptions = new CSharpParseOptions(kind: SourceCodeKind.Regular, languageVersion: LanguageVersion.CSharp3);
         }
 
         internal void GenerateCode()
@@ -72,7 +75,7 @@ namespace MiniBench
         {
             //var benchmarkAttribute = typeof(BenchmarkAttribute).Name.Replace("Attribute", "");
             var benchmarkAttribute = "BenchmarkAttribute";
-            var validMethods = methods.Where(m => m.Modifiers.Any(mod => mod.CSharpKind() == SyntaxKind.PublicKeyword))
+            var validMethods = methods.Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)))
                                       .Where(m => m.AttributeLists.SelectMany(atrl => atrl.Attributes)
                                                                   .Any(atr => atr.Name.ToString() == benchmarkAttribute))
                                       .ToList();
@@ -91,7 +94,7 @@ namespace MiniBench
 
                 var codeGenTimer = Stopwatch.StartNew();
                 var returnType = method.ReturnType as PredefinedTypeSyntax;
-                var generateBlackhole = returnType.Keyword.CSharpKind() != SyntaxKind.VoidKeyword;
+                var generateBlackhole = returnType.Keyword.IsKind(SyntaxKind.VoidKeyword) == false;
                 var generatedBenchmark = BenchmarkTemplate.ProcessCodeTemplates(namespaceName, className, methodName, generatedClassName, generateBlackhole);
                 var generatedRunnerTree = CSharpSyntaxTree.ParseText(generatedBenchmark, options: parseOptions, path: outputFileName, encoding: defaultEncoding);
                 generatedRunners.Add(generatedRunnerTree);
@@ -140,7 +143,9 @@ namespace MiniBench
                 using (StreamReader reader = new StreamReader(stream))
                 {
                     string result = reader.ReadToEnd();
-                    var codeTree = CSharpSyntaxTree.ParseText(result, options: parseOptions);
+                    // By adding the path we can match up the errors/warnings (in the VS Output Window) with the embedded resource .cs file
+                    // TODO fix this so that rather than "MiniBench.Profiling.GCProfiler.cs", it's the real path to the file on disk
+                    var codeTree = CSharpSyntaxTree.ParseText(result, options: parseOptions, path: codeFile, encoding: defaultEncoding);
                     embeddedCodeTrees.Add(codeTree);
                 }
             }
@@ -167,14 +172,26 @@ namespace MiniBench
             {
                 Console.WriteLine("\nCurrent directory: " + Environment.CurrentDirectory);
                 var codeEmitToDiskTimer = Stopwatch.StartNew();
+
                 // TODO fix this IOException (happens if the file is still being used whilst we are trying to "re-write" it)
                 //  Unhandled Exception: System.IO.IOException: The process cannot access the file '....MiniBench.Demo.dll' because it is being used by another process.
+
+                // TODO we should probably emit to a .temp file, than only if it's successful copy that over the top of the existing file (and delete the .temp file)
+                // that way, if something goes wrong the original binaries are left in-tact and we never emit invalid files
+
+                // TODO work out how to emit code that Targets a particular Framework/Runtime version (i.e. 2.0, 3.5, 4.0 etc)
+                // is it done be specifying the particular version of mscorlib, or in another way??
+
                 var emitToDiskResult = compilation.Emit(outputPath: projectSettings.OutputFileName + projectSettings.OutputFileExtension,
                                                         pdbPath: projectSettings.OutputFileName + ".pdb",
-                                                        xmlDocumentationPath: projectSettings.OutputFileName + ".xml");
+                                                        xmlDocPath: projectSettings.OutputFileName + ".xml");
                 codeEmitToDiskTimer.Stop();
                 Console.WriteLine("Took {0} ({1,7:N2}ms) - to emit generated code to DISK", codeEmitToDiskTimer.Elapsed, codeEmitToDiskTimer.ElapsedMilliseconds);
-                Console.WriteLine("Emit to DISK Success: {0}\n  {1}", emitToDiskResult.Success, string.Join("\n  ", emitToDiskResult.Diagnostics));
+                Console.WriteLine("Emit to DISK Success: {0}", emitToDiskResult.Success);
+                if (emitToDiskResult.Diagnostics.Length > 0)
+                {
+                    Console.WriteLine("\nCompilation Warnings:\n\t{0}\n", string.Join("\n\t", emitToDiskResult.Diagnostics));
+                }
             }
         }
 
@@ -191,8 +208,8 @@ namespace MiniBench
                     // and http://source.roslyn.codeplex.com/#Roslyn.Test.Utilities/TestBase.cs,d7b20a77e5912080
                     // and http://source.roslyn.codeplex.com/#Roslyn.Compilers.CSharp.Symbol.UnitTests/Compilation/ReferenceManagerTests.cs,a90d68f18e804c1a,references
 
-                    MetadataReference.CreateFromAssembly(typeof(String).Assembly),
-                    //MetadataReference.CreateFromAssembly(Assembly.Load("mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")),
+                    //MetadataReference.CreateFromAssembly(typeof(String).Assembly),
+                    MetadataReference.CreateFromAssembly(Assembly.Load("mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")),
                     //MetadataReference.CreateFromAssembly(Assembly.LoadFile(@"C:\Windows\Microsoft.NET\Framework64\v2.0.50727\mscorlib.dll")),
                     //MetadataReference.CreateFromAssembly(Assembly.LoadFrom(@"C:\Windows\Microsoft.NET\Framework64\v2.0.50727\mscorlib.dll")),
                     //MetadataReference.CreateFromAssembly(Assembly.LoadFrom(@"C:\Windows\Microsoft.NET\Framework\v2.0.50727\mscorlib.dll")),
@@ -204,7 +221,16 @@ namespace MiniBench
             // Now add the references we need from the .csproj file
             foreach (var reference in projectSettings.References)
             {
-                Console.WriteLine("Processing: {0} ({1}) in {2}", reference.Item2, reference.Item1, projectSettings.RootFolder);
+                // TODO we need to handle references that don't have a "HintPath", i.e. things like:
+                // <Reference Include="System" />
+                // <Reference Include="System.Data" />
+                // <Reference Include="System.Xml" />
+                // At the moment we only deal with ones like this:
+                // <Reference Include="xunit">
+                //     <HintPath>..\packages\xunit.1.9.2\lib\net20\xunit.dll</HintPath>
+                // </Reference>
+                // Also we seem to have problems when the version is specified, like so:
+                // MiniBench.Core, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL ..\packages\MiniBench.0.1.0-beta\lib\MiniBench.Core.dll
                 standardReferences.Add(MetadataReference.CreateFromFile(Path.Combine(projectSettings.RootFolder, reference.Item2)));
             }
 
