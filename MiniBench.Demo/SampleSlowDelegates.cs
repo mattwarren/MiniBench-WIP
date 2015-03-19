@@ -7,6 +7,8 @@ namespace MiniBench.Demo
     // From // From https://github.com/controlflow/resharper-heapview/blob/master/ReSharper.HeapView/Tests/Data/Daemon/SlowDelegates01.cs
     class SampleSlowDelegates
     {
+        private delegate void Action();
+
         // lags only if T is a reference type (but not at x64)
         static void GenericTest<T>() { PassMeDelegate(() => typeof(T)); }   // <--
         static void GenericTest2<T>() { PassMeDelegate(Bar<T>.Foo); }       // <--

@@ -19,6 +19,7 @@ namespace MiniBench.Demo
         [Fact]
         static void BasicTest()
         {
+            // TODO Create a .NET 2.0, 3.0, 3.5, 4.0 and 4.5 test project and check they all compile (with the corret Target Version)!!!!
             DemoTestRunCount = 0;
             Options opt = new OptionsBuilder()
                     .Include(typeof(SampleBenchmark))

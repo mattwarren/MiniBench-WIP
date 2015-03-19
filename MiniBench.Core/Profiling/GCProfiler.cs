@@ -20,7 +20,7 @@ namespace MiniBench.Core.Profiling
             beforeGen0 = GC.CollectionCount(0);
             beforeGen1 = GC.CollectionCount(1);
             beforeGen2 = GC.CollectionCount(2);
-            memoryBefore = GC.GetTotalMemory(forceFullCollection: false);
+            memoryBefore = GC.GetTotalMemory(false);
         }
 
         public IList<ProfilerResult> AfterIteration()
@@ -28,7 +28,7 @@ namespace MiniBench.Core.Profiling
             var gen0 = GC.CollectionCount(0) - beforeGen0;
             var gen1 = GC.CollectionCount(1) - beforeGen1;
             var gen2 = GC.CollectionCount(2) - beforeGen2;
-            var memoryAfter = GC.GetTotalMemory(forceFullCollection: false);
+            var memoryAfter = GC.GetTotalMemory(false);
 
             return new []
                 {
