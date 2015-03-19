@@ -11,6 +11,10 @@ namespace ConsoleApp_3_5
         // The Benchmark Runner new's up a new instance of this class!!
         private static int _demoTestRunCount;
 
+        public static void Main(string[] args)
+        {
+        }
+
         [Fact]
         public void BasicTest()
         {
