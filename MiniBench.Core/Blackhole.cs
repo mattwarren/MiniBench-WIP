@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+//using System.Runtime.CompilerServices;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -30,12 +31,26 @@ namespace MiniBench.Core
             }
         }
 
+        public void Consume(Object @object)
+        {
+            // TODO Complete this for Object
+        }
+
+        public void Consume(ValueType @valueType)
+        {
+            // TODO Complete this for ValueType
+        }
+
+
         // TODO work out how much of this we really need to defeat the .NET JITter (as opposed to HotSpot)
         //[MethodImpl(MethodImplOptions.NoInlining)]
-        public void Consume(double d)
+        //[MethodImpl(MethodImplOptions.AggressiveInlining)] // .NET 4.0 and up only
+        public void ConsumeJavaMethod(double d)
         {
-            //double d1 = this.d1; // volatile read
-            double d1 = Thread.VolatileRead(ref this.d1);
+            double d1 = this.d1; // volatile read
+            //double d1 = Thread.VolatileRead(ref this.d1);
+            //double d1 = Volatile.Read(ref this.d1);
+            Thread.MemoryBarrier();
 
             // this uses '&' so that both operands are executed
             // if it used '&&' instead that the RHS one could be short-circuited 
@@ -44,6 +59,19 @@ namespace MiniBench.Core
                 // SHOULD NEVER HAPPEN
                 nullBait.d1 = d; // implicit null pointer exception
             }
+        }
+
+        // Don't force the JITter one way or the other, let it decide and see what happens (inlined or not)
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void Consume(double d)
+        {
+            this.d1 += d;
+        }
+
+        //[MethodImpl(MethodImplOptions.AggressiveInlining)] // .NET 4.0 and up only
+        public void ConsumeAggressiveInlining(double d)
+        {
+            this.d1 += d;
         }
 
         private double Ulp(double value)
