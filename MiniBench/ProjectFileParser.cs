@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Xml;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 namespace MiniBench
@@ -31,6 +32,7 @@ namespace MiniBench
             );
         }
 
+
         private String GetOutputFileName(XmlDocument xmldoc, XmlNamespaceManager mgr)
         {
             XmlNode item = xmldoc.SelectSingleNode("//x:AssemblyName", mgr);
@@ -45,23 +47,24 @@ namespace MiniBench
 
         private String GetOutputFileExtension(XmlDocument xmldoc, XmlNamespaceManager mgr)
         {
+            var fileExtension = ".Unknown";
             XmlNode item = xmldoc.SelectSingleNode("//x:OutputType", mgr);
-            Console.WriteLine("OutputType: " + (item != null ? item.InnerText : "<NULL>"));
             if (item != null)
             {
                 if (item.InnerText == "Exe" || item.InnerText == "WinExe")
-                    return ".exe";
+                    fileExtension = ".exe";
                 else if (item.InnerText == "Library")
-                    return ".dll";
+                    fileExtension = ".dll";
             }
 
-            return ".Unknown";
+            Console.WriteLine("FileExtension: {0} -> {1}", (item != null ? item.InnerText : "<NULL>"), fileExtension);
+            return fileExtension;
         }
 
         private LanguageVersion GetTargetFrameworkVersion(XmlDocument xmldoc, XmlNamespaceManager mgr)
         {
             // Default to CSharp2
-            LanguageVersion languageVersion = LanguageVersion.CSharp2;
+            var languageVersion = LanguageVersion.CSharp2;
             XmlNode item = xmldoc.SelectSingleNode("//x:TargetFrameworkVersion", mgr);
             if (item != null)
             {

@@ -20,15 +20,17 @@ namespace MiniBench
         private readonly Encoding defaultEncoding = Encoding.UTF8;
 
         private readonly String filePrefix = "Generated_Runner";
+        private readonly String launcherFileName = "Generated_Launcher.cs";
+        private readonly String benchmarkAttribute = "Benchmark";
 
         internal CodeGenerator(ProjectSettings projectSettings)
         {
             this.projectSettings = projectSettings;
 
-            //parseOptions = new CSharpParseOptions(kind: SourceCodeKind.Regular, 
-            //                        languageVersion: projectSettings.TargetFrameworkVersion);
-            // We don't need to target .NET 2.0 language features, as long as we build a file that TARGETS the .NET 2.0 Framework
-            parseOptions = new CSharpParseOptions(kind: SourceCodeKind.Regular, languageVersion: LanguageVersion.CSharp3);
+            // We don't want to target .NET 2.0 only LANGUAGE features, otherwise we can't use all the nice compiler-only stuff
+            // like var, auto-properties, names arguments, etc. The main thing is that when we build the Benchmark .exe/.dll, 
+            // we need to TARGET the correct Runtime Framework Version, which is either .NET 2.0 or 4.0.
+            parseOptions = new CSharpParseOptions(kind: SourceCodeKind.Regular, languageVersion: LanguageVersion.CSharp4);
         }
 
         internal void GenerateCode()
@@ -51,7 +53,7 @@ namespace MiniBench
                 var code = File.ReadAllText(Path.Combine(projectSettings.RootFolder, file));
                 var benchmarkTree = CSharpSyntaxTree.ParseText(code, options: parseOptions);
 
-                // TODO error cheecking, in case the file doesn't have a Namespace, Class or any valid Methods!
+                // TODO error checking, in case the file doesn't have a Namespace, Class or any valid Methods!
                 var @namespace = NodesOfType<NamespaceDeclarationSyntax>(benchmarkTree).FirstOrDefault();
                 var namespaceName = @namespace.Name.ToString();
                 // TODO we're not robust to having multiple classes in 1 file, we need to find the class that contains the [Benchmark] methods!!
@@ -68,7 +70,7 @@ namespace MiniBench
             var generatedLauncher = GenerateLauncher(generatedCodeDirectory);
             allSyntaxTrees.Add(generatedLauncher);
 
-            CompileAndEmitCode(allSyntaxTrees, emitToDisk: true);
+            CompileAndEmitCode(allSyntaxTrees);
         }
 
         private IEnumerable<SyntaxTree> GenerateRunners(IEnumerable<MethodDeclarationSyntax> methods, string namespaceName, string className, string outputDirectory)
@@ -78,17 +80,13 @@ namespace MiniBench
                     Name = m.Identifier.ToString(),
                     ReturnType = m.ReturnType,
                     Blackhole = ShouldGenerateBlackhole(m.ReturnType),
-                    //ReturnTypeType = m.ReturnType.GetType().Name,
-                    //ReturnPredefinedTypeSyntax = m.ReturnType as PredefinedTypeSyntax != null ? 
-                    //                            (m.ReturnType as PredefinedTypeSyntax).Keyword.Kind().ToString() : "<UNKNOWN>",
-                    //ReturnIdentifierNameSyntax = m.ReturnType as IdentifierNameSyntax != null ?
-                    //                            (m.ReturnType as IdentifierNameSyntax).Kind().ToString() : "<UNKNOWN>",
                     Attributes = String.Join(", ", m.AttributeLists.SelectMany(atrl => atrl.Attributes.Select(atr => atr.Name.ToString())))
                 });
-            Console.WriteLine("Methods:\n  " + String.Join("\n  ", methodWithAttributes));
+            Console.WriteLine(
+                String.Join("\n", methodWithAttributes.Select(m => 
+                    string.Format("{0,25} - {1} - (Blackhole {2,5}), Attributes = {3}",
+                        m.Name, m.ReturnType.ToString().PadRight(10), m.Blackhole, m.Attributes))));
 
-            //var benchmarkAttribute = typeof(BenchmarkAttribute).Name.Replace("Attribute", "");
-            var benchmarkAttribute = "Benchmark";
             var validMethods = methods.Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)))
                                       .Where(m => m.AttributeLists.SelectMany(atrl => atrl.Attributes)
                                                                   .Any(atr => atr.Name.ToString() == benchmarkAttribute))
@@ -108,7 +106,6 @@ namespace MiniBench
 
                 var codeGenTimer = Stopwatch.StartNew();
                 var generateBlackhole = ShouldGenerateBlackhole(method.ReturnType);
-                
                 var generatedBenchmark = BenchmarkTemplate.ProcessCodeTemplates(namespaceName, className, methodName, generatedClassName, generateBlackhole);
                 var generatedRunnerTree = CSharpSyntaxTree.ParseText(generatedBenchmark, options: parseOptions, path: outputFileName, encoding: defaultEncoding);
                 generatedRunners.Add(generatedRunnerTree);
@@ -122,6 +119,83 @@ namespace MiniBench
                 Console.WriteLine("Generated file: {0}\n", fileName);
             }
             return generatedRunners;
+        }
+
+        private SyntaxTree GenerateLauncher(string outputDirectory)
+        {
+            var generatedLauncher = BenchmarkTemplate.ProcessLauncherTemplate();
+            var outputFileName = Path.Combine(outputDirectory, launcherFileName);
+            var codeGenTimer = Stopwatch.StartNew();
+            var generatedLauncherTree = CSharpSyntaxTree.ParseText(generatedLauncher, options: parseOptions, path: outputFileName, encoding: defaultEncoding);
+            codeGenTimer.Stop();
+            Console.WriteLine("Took {0} ({1,7:N2}ms) - to generate CSharp Syntax Tree", codeGenTimer.Elapsed, codeGenTimer.ElapsedMilliseconds);
+
+            var fileWriteTimer = Stopwatch.StartNew();
+            File.WriteAllText(outputFileName, generatedLauncherTree.GetRoot().ToFullString(), encoding: defaultEncoding);
+            fileWriteTimer.Stop();
+            Console.WriteLine("Took {0} ({1,7:N2}ms) - to write file to disk", fileWriteTimer.Elapsed, fileWriteTimer.ElapsedMilliseconds);
+            Console.WriteLine("Generated file: " + launcherFileName);
+
+            return generatedLauncherTree;
+        }
+
+        private IEnumerable<SyntaxTree> GenerateEmbeddedCode()
+        {
+            var embeddedCodeTrees = new List<SyntaxTree>();
+            var assembly = Assembly.GetExecutingAssembly();
+            foreach (var codeFile in assembly.GetManifestResourceNames())
+            {
+                if (codeFile.StartsWith("MiniBench.Core.") == false &&
+                    codeFile.StartsWith("MiniBench.Profiling.") == false)
+                    continue;
+
+                using (Stream stream = assembly.GetManifestResourceStream(codeFile))
+                using (var reader = new StreamReader(stream))
+                {
+                    string result = reader.ReadToEnd();
+                    // By adding a "virtual" path we can match up the errors/warnings (in the VS Output Window) with the embedded resource .cs file
+                    var codeTree = CSharpSyntaxTree.ParseText(result, options: parseOptions, path: codeFile, encoding: defaultEncoding);
+                    embeddedCodeTrees.Add(codeTree);
+                }
+            }
+
+            return embeddedCodeTrees;
+        }
+
+        private void CompileAndEmitCode(IEnumerable<SyntaxTree> allSyntaxTrees)
+        {
+            // As we're adding out own Main Function, we always Compile as OutputKind.ConsoleApplication, regardless of the actual extension (dll/exe)
+            var compilationOptions = new CSharpCompilationOptions(
+                                            outputKind: OutputKind.ConsoleApplication,
+                                            mainTypeName: "MiniBench.Benchmarks.Program",
+                                            optimizationLevel: OptimizationLevel.Release);
+
+            // One call here will be sloooowww (probably Create() or Emit()), because it causes a load/JIT of certain parts of Roslyn
+            // see https://roslyn.codeplex.com/discussions/573503 for a full explanation (JITting of Roslyn dll's is the main cause)
+
+            var compilationTimer = Stopwatch.StartNew();
+            var compilation = CSharpCompilation.Create(projectSettings.OutputFileName, allSyntaxTrees, GetRequiredReferences(), compilationOptions);
+            compilationTimer.Stop();
+            Console.WriteLine("\nTook {0} ({1,7:N2}ms) - to create the CSharpCompilation", compilationTimer.Elapsed, compilationTimer.ElapsedMilliseconds);
+            Console.WriteLine("\nCurrent directory: " + Environment.CurrentDirectory);
+
+            // TODO fix this IOException (happens if the file is still being used whilst we are trying to "re-write" it)
+            //  Unhandled Exception: System.IO.IOException: The process cannot access the file '....MiniBench.Demo.dll' because it is being used by another process.
+
+            // TODO we should probably emit to a .temp file, than only if it's successful copy that over the top of the existing file (and delete the .temp file)
+            // that way, if something goes wrong the original binaries are left in-tact and we never emit invalid files
+
+            var codeEmitToDiskTimer = Stopwatch.StartNew();
+            var emitToDiskResult = compilation.Emit(outputPath: projectSettings.OutputFileName + projectSettings.OutputFileExtension,
+                                                    pdbPath: projectSettings.OutputFileName + ".pdb",
+                                                    xmlDocPath: projectSettings.OutputFileName + ".xml");
+            codeEmitToDiskTimer.Stop();
+            Console.WriteLine("Took {0} ({1,7:N2}ms) - to emit generated code to DISK", codeEmitToDiskTimer.Elapsed, codeEmitToDiskTimer.ElapsedMilliseconds);
+            Console.WriteLine("Emit to DISK Success: {0}", emitToDiskResult.Success);
+            if (emitToDiskResult.Diagnostics.Length > 0)
+            {
+                Console.WriteLine("\nCompilation Warnings:\n\t{0}\n", string.Join("\n\t", emitToDiskResult.Diagnostics));
+            }
         }
 
         private bool ShouldGenerateBlackhole(TypeSyntax returnType)
@@ -140,99 +214,14 @@ namespace MiniBench
             return false;
         }
 
-        private SyntaxTree GenerateLauncher(string outputDirectory)
-        {
-            var generatedLauncher = BenchmarkTemplate.ProcessLauncherTemplate();
-            var fileName = "Generated_Launcher.cs";
-            var outputFileName = Path.Combine(outputDirectory, fileName);
-            var codeGenTimer = Stopwatch.StartNew();
-            var generatedLauncherTree = CSharpSyntaxTree.ParseText(generatedLauncher, options: parseOptions, path: outputFileName, encoding: defaultEncoding);
-            codeGenTimer.Stop();
-            Console.WriteLine("Took {0} ({1,7:N2}ms) - to generate CSharp Syntax Tree", codeGenTimer.Elapsed, codeGenTimer.ElapsedMilliseconds);
-
-            var fileWriteTimer = Stopwatch.StartNew();
-            File.WriteAllText(outputFileName, generatedLauncherTree.GetRoot().ToFullString(), encoding: defaultEncoding);
-            fileWriteTimer.Stop();
-            Console.WriteLine("Took {0} ({1,7:N2}ms) - to write file to disk", fileWriteTimer.Elapsed, fileWriteTimer.ElapsedMilliseconds);
-            Console.WriteLine("Generated file: " + fileName);
-
-            return generatedLauncherTree;
-        }
-
-        private IEnumerable<SyntaxTree> GenerateEmbeddedCode()
-        {
-            var embeddedCodeTrees = new List<SyntaxTree>();
-            var assembly = Assembly.GetExecutingAssembly();
-            foreach (var codeFile in assembly.GetManifestResourceNames())
-            {
-                if (codeFile.StartsWith("MiniBench.Core.") == false &&
-                    codeFile.StartsWith("MiniBench.Profiling.") == false)
-                    continue;
-
-                using (Stream stream = assembly.GetManifestResourceStream(codeFile))
-                using (StreamReader reader = new StreamReader(stream))
-                {
-                    string result = reader.ReadToEnd();
-                    // By adding the path we can match up the errors/warnings (in the VS Output Window) with the embedded resource .cs file
-                    // TODO fix this so that rather than "MiniBench.Profiling.GCProfiler.cs", it's the real path to the file on disk
-                    var codeTree = CSharpSyntaxTree.ParseText(result, options: parseOptions, path: codeFile, encoding: defaultEncoding);
-                    embeddedCodeTrees.Add(codeTree);
-                }
-            }
-
-            return embeddedCodeTrees;
-        }
-
-        private void CompileAndEmitCode(IEnumerable<SyntaxTree> allSyntaxTrees, bool emitToDisk)
-        {
-            var compilationOptions = new CSharpCompilationOptions(
-                                            outputKind: OutputKind.ConsoleApplication,
-                                            mainTypeName: "MiniBench.Benchmarks.Program",
-                                            optimizationLevel: OptimizationLevel.Release);
-
-            // One call here will be sloooowww (probably Create() or Emit()), because it causes a load/JIT of certain parts of Roslyn
-            // see https://roslyn.codeplex.com/discussions/573503 for a full explanation (JITting of Roslyn dll's is the main cause)
-
-            var compilationTimer = Stopwatch.StartNew();
-            var compilation = CSharpCompilation.Create(projectSettings.OutputFileName, allSyntaxTrees, GetRequiredReferences(), compilationOptions);
-            compilationTimer.Stop();
-            Console.WriteLine("\nTook {0} ({1,7:N2}ms) - to create the CSharpCompilation", compilationTimer.Elapsed, compilationTimer.ElapsedMilliseconds);
-
-            if (emitToDisk)
-            {
-                Console.WriteLine("\nCurrent directory: " + Environment.CurrentDirectory);
-                var codeEmitToDiskTimer = Stopwatch.StartNew();
-
-                // TODO fix this IOException (happens if the file is still being used whilst we are trying to "re-write" it)
-                //  Unhandled Exception: System.IO.IOException: The process cannot access the file '....MiniBench.Demo.dll' because it is being used by another process.
-
-                // TODO we should probably emit to a .temp file, than only if it's successful copy that over the top of the existing file (and delete the .temp file)
-                // that way, if something goes wrong the original binaries are left in-tact and we never emit invalid files
-
-                // TODO work out how to emit code that Targets a particular Framework/Runtime version (i.e. 2.0, 3.5, 4.0 etc)
-                // is it done be specifying the particular version of mscorlib, or in another way??
-
-                var emitToDiskResult = compilation.Emit(outputPath: projectSettings.OutputFileName + projectSettings.OutputFileExtension,
-                                                        pdbPath: projectSettings.OutputFileName + ".pdb",
-                                                        xmlDocPath: projectSettings.OutputFileName + ".xml");
-                codeEmitToDiskTimer.Stop();
-                Console.WriteLine("Took {0} ({1,7:N2}ms) - to emit generated code to DISK", codeEmitToDiskTimer.Elapsed, codeEmitToDiskTimer.ElapsedMilliseconds);
-                Console.WriteLine("Emit to DISK Success: {0}", emitToDiskResult.Success);
-                if (emitToDiskResult.Diagnostics.Length > 0)
-                {
-                    Console.WriteLine("\nCompilation Warnings:\n\t{0}\n", string.Join("\n\t", emitToDiskResult.Diagnostics));
-                }
-            }
-        }
-
         private IEnumerable<MetadataReference> GetRequiredReferences()
         {
             var standardReferences = new List<MetadataReference>(16);
             if (projectSettings.TargetFrameworkVersion == LanguageVersion.CSharp2 ||
                 projectSettings.TargetFrameworkVersion == LanguageVersion.CSharp3)
             {
-                //We have to read the dll's from disk as a Stream and create a MetadataReference from that.
-                //If we use MetadataReference.CreateFromAssembly(..) the .NET 4.0 versions are used instead.
+                // We have to read the dll's from disk as a Stream and create a MetadataReference from that.
+                // If we use MetadataReference.CreateFromAssembly(..) the .NET 4.0 versions are used instead.
                 var runtimeDlls = new[]
                     {
                         // TODO C:\Windows\Microsoft.NET\Framework64 or just \Framework ?!?

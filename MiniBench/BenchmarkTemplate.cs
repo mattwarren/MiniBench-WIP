@@ -5,7 +5,6 @@
         private static string namespaceReplaceText = "##NAMESPACE-NAME##";
         private static string classReplaceText = "##CLASS-NAME##";
         private static string methodReplaceText = "##METHOD-NAME##";
-        //private static string methodParametersReplaceText = "##METHOD-PARAMETERS##";
         private static string benchmarkMethodCallReplaceText = "##BENCHMARK-METHOD-CALL##";
         private static string generatedClassReplaceText = "##GENERAGED-CLASS-NAME##";
 
@@ -168,18 +167,12 @@ namespace MiniBench.Benchmarks
                                     .Build();
                 new Runner(opt).Run();
             }
-
-            // TODO put in here any attributes that control the benchmark parameters
-            //Options opt = new OptionsBuilder()
-            //        .Include(typeof(##NAMESPACE-NAME##.##CLASS-NAME##))
-            //        .Build();
-            //new Runner(opt).Run();
         }
     }
 }";
 
         internal static string ProcessCodeTemplates(string namespaceName, string className, string methodName, 
-                                                    string generatedClassName, bool generateBlackhole = true)
+                                                    string generatedClassName, bool generateBlackhole)
         {
             // TODO at some point, we might need a less-hacky templating mechanism?!
             string benchmarkMethodCall;

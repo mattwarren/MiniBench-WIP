@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 namespace MiniBench
@@ -19,18 +20,22 @@ namespace MiniBench
         public IEnumerable<string> SourceFiles { get; private set; }
 
         public IEnumerable<Tuple<string, string>> References { get; private set; }
-        
-        public ProjectSettings(string projectPath, string rootFolder, string outputFileName, 
-                               string outputFileExtension, LanguageVersion targetFrameworkVersion,
-                               IEnumerable<String> sourceFiles, IEnumerable<Tuple<String, String>> references)
+
+        public ProjectSettings(string projectPath, 
+                                string rootFolder, 
+                                string outputFileName, 
+                                string outputFileExtension, 
+                                LanguageVersion targetFrameworkVersion, 
+                                IEnumerable<String> sourceFiles, 
+                                IEnumerable<Tuple<String, String>> references)
         {
             ProjectPath = projectPath;
             RootFolder = rootFolder;
             OutputFileName = outputFileName;
             OutputFileExtension = outputFileExtension;
             TargetFrameworkVersion = targetFrameworkVersion;
-            References = references;
             SourceFiles = sourceFiles;
+            References = references;
         }
     }
 }

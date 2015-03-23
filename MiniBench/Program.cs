@@ -12,7 +12,7 @@ namespace MiniBench
         {
             try
             {
-                Console.WriteLine("####################### MiniBench Code Generation #######################");
+                Console.WriteLine("\n####################### MiniBench Code Generation #######################");
 
                 var expectedExtension = ".csproj";
                 if (args.Length == 0)
@@ -47,7 +47,7 @@ namespace MiniBench
             }
             finally
             {
-                Console.WriteLine("####################### End of MiniBench Code Generation #######################");
+                Console.WriteLine("####################### End of MiniBench Code Generation #######################\n");
             }
         }
     }
