@@ -133,6 +133,9 @@ namespace MiniBench.Benchmarks
             if (commandLineArgs.ShouldExit)
                 return;
 
+            Console.WriteLine(""Environment Version: "" + Environment.Version);
+            Console.WriteLine(""Executing Assembly - Image Runtime Version: "" + Assembly.GetExecutingAssembly().ImageRuntimeVersion);
+
             string benchmarkPrefix = ""Generated_Runner_"";
             if (commandLineArgs.ListBenchmarks)
             {

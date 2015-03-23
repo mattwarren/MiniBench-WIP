@@ -1,11 +1,13 @@
 using System;
+using System.Linq;
 using System.Reflection;
+using System.Runtime.Versioning;
 using MiniBench.Core;
 using Xunit;
 
-namespace ConsoleApp_3_0
+namespace ConsoleApp_4_0
 {
-    public class SampleBenchmark_3_0
+    public class SampleBenchmark_4_0
     {
         // This has to be static for the test to work!! 
         // The Benchmark Runner new's up a new instance of this class!!
@@ -22,6 +24,16 @@ namespace ConsoleApp_3_0
         {
             Console.WriteLine("Environment Version: " + Environment.Version);
             Console.WriteLine("Assembly Runtime Version: " + Assembly.GetExecutingAssembly().ImageRuntimeVersion);
+
+            // From http://stackoverflow.com/questions/2310701/determine-framework-clr-version-of-assembly/18623516#18623516
+            // Only works in .NET 4.0 and upwards though (not 2.0, 3.0 & 3.5)
+            object[] list = Assembly.GetExecutingAssembly().GetCustomAttributes(true);
+            var a = (TargetFrameworkAttribute)list.FirstOrDefault(p => p is TargetFrameworkAttribute);
+            // TODO Seems like MiniBench needs to put these back in when we re-write the file?
+            if (a != null)
+            {
+                Console.WriteLine("Target Framework: " + a.FrameworkDisplayName);
+            }
         }
 
         [Fact]
@@ -29,7 +41,7 @@ namespace ConsoleApp_3_0
         {
             _demoTestRunCount = 0;
             Options opt = new OptionsBuilder()
-                    .Include(typeof(SampleBenchmark_3_0))
+                    .Include(typeof(SampleBenchmark_4_0))
                     .WarmupRuns(0)
                     .Runs(1)
                     .Build();
@@ -39,10 +51,9 @@ namespace ConsoleApp_3_0
 
             PrintRuntimeInfo();
 
-            // Remember: .NET 3.0 and 3.5 targetted projects both run on-top of the .NET 2.0 runtime!!
             Assembly executingAssembly = Assembly.GetExecutingAssembly();
-            Assert.True(executingAssembly.ImageRuntimeVersion.StartsWith("v2.0."),
-                        "Expected .NET Runtime Version to be v2.0.X.X, but was " + executingAssembly.ImageRuntimeVersion);
+            Assert.True(executingAssembly.ImageRuntimeVersion.StartsWith("v4.0."),
+                        "Expected .NET Runtime Version to be v4.0.X.X, but was " + executingAssembly.ImageRuntimeVersion);
         }
 
         [Benchmark]

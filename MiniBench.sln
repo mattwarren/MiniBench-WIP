@@ -1,8 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.31101.0
-MinimumVisualStudioVersion = 10.0.40219.1
+# Visual Studio 2012
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiniBench.Core", "MiniBench.Core\MiniBench.Core.csproj", "{C1A5C977-180E-428C-8661-78C4381D9E42}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiniBench.Demo", "MiniBench.Demo\MiniBench.Demo.csproj", "{2457F6A9-A557-4106-9429-18B6433FBE09}"
@@ -11,6 +9,33 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiniBench.Demo", "MiniBench
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiniBench", "MiniBench\MiniBench.csproj", "{EB051CB9-7B65-4429-9D64-4AE72B0E6B70}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "IntegrationTests", "IntegrationTests", "{4118291D-933F-48DF-858E-93C4129ADB3D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApp-2.0", "IntegrationTests\ConsoleApp-2.0\ConsoleApp-2.0.csproj", "{522BCAAF-338A-4CFA-BB00-29C6A38A5403}"
+	ProjectSection(ProjectDependencies) = postProject
+		{EB051CB9-7B65-4429-9D64-4AE72B0E6B70} = {EB051CB9-7B65-4429-9D64-4AE72B0E6B70}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApp-3.0", "IntegrationTests\ConsoleApp-3.0\ConsoleApp-3.0.csproj", "{106EF2F9-2FE4-4F32-B992-F696121329C3}"
+	ProjectSection(ProjectDependencies) = postProject
+		{EB051CB9-7B65-4429-9D64-4AE72B0E6B70} = {EB051CB9-7B65-4429-9D64-4AE72B0E6B70}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApp-3.5", "IntegrationTests\ConsoleApp-3.5\ConsoleApp-3.5.csproj", "{418E73FA-4599-4F80-97FA-B717A2A93F6D}"
+	ProjectSection(ProjectDependencies) = postProject
+		{EB051CB9-7B65-4429-9D64-4AE72B0E6B70} = {EB051CB9-7B65-4429-9D64-4AE72B0E6B70}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApp-4.5", "IntegrationTests\ConsoleApp-4.5\ConsoleApp-4.5.csproj", "{9D1A5F69-3299-4730-8896-482920D19627}"
+	ProjectSection(ProjectDependencies) = postProject
+		{EB051CB9-7B65-4429-9D64-4AE72B0E6B70} = {EB051CB9-7B65-4429-9D64-4AE72B0E6B70}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApp-4.0", "IntegrationTests\ConsoleApp-4.0\ConsoleApp-4.0.csproj", "{4AEE47AF-ED78-42FC-BCCB-5488DCF39FB5}"
+	ProjectSection(ProjectDependencies) = postProject
+		{EB051CB9-7B65-4429-9D64-4AE72B0E6B70} = {EB051CB9-7B65-4429-9D64-4AE72B0E6B70}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -30,8 +55,35 @@ Global
 		{EB051CB9-7B65-4429-9D64-4AE72B0E6B70}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EB051CB9-7B65-4429-9D64-4AE72B0E6B70}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EB051CB9-7B65-4429-9D64-4AE72B0E6B70}.Release|Any CPU.Build.0 = Release|Any CPU
+		{522BCAAF-338A-4CFA-BB00-29C6A38A5403}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{522BCAAF-338A-4CFA-BB00-29C6A38A5403}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{522BCAAF-338A-4CFA-BB00-29C6A38A5403}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{522BCAAF-338A-4CFA-BB00-29C6A38A5403}.Release|Any CPU.Build.0 = Release|Any CPU
+		{106EF2F9-2FE4-4F32-B992-F696121329C3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{106EF2F9-2FE4-4F32-B992-F696121329C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{106EF2F9-2FE4-4F32-B992-F696121329C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{106EF2F9-2FE4-4F32-B992-F696121329C3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{418E73FA-4599-4F80-97FA-B717A2A93F6D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{418E73FA-4599-4F80-97FA-B717A2A93F6D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{418E73FA-4599-4F80-97FA-B717A2A93F6D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{418E73FA-4599-4F80-97FA-B717A2A93F6D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9D1A5F69-3299-4730-8896-482920D19627}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9D1A5F69-3299-4730-8896-482920D19627}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9D1A5F69-3299-4730-8896-482920D19627}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9D1A5F69-3299-4730-8896-482920D19627}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4AEE47AF-ED78-42FC-BCCB-5488DCF39FB5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4AEE47AF-ED78-42FC-BCCB-5488DCF39FB5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4AEE47AF-ED78-42FC-BCCB-5488DCF39FB5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4AEE47AF-ED78-42FC-BCCB-5488DCF39FB5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{522BCAAF-338A-4CFA-BB00-29C6A38A5403} = {4118291D-933F-48DF-858E-93C4129ADB3D}
+		{106EF2F9-2FE4-4F32-B992-F696121329C3} = {4118291D-933F-48DF-858E-93C4129ADB3D}
+		{418E73FA-4599-4F80-97FA-B717A2A93F6D} = {4118291D-933F-48DF-858E-93C4129ADB3D}
+		{9D1A5F69-3299-4730-8896-482920D19627} = {4118291D-933F-48DF-858E-93C4129ADB3D}
+		{4AEE47AF-ED78-42FC-BCCB-5488DCF39FB5} = {4118291D-933F-48DF-858E-93C4129ADB3D}
 	EndGlobalSection
 EndGlobal

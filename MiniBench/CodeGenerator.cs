@@ -227,26 +227,40 @@ namespace MiniBench
 
         private IEnumerable<MetadataReference> GetRequiredReferences()
         {
-            var standardReferences = new List<MetadataReference>
-                { 
-                    // TODO need to get a reference to mscorlib v 2.0 here, 
-                    // can't use "typeof(String).Assembly" as that's v 4.0 (because MiniBench itself is 4.0)
-                    //  warning CS1701: Assuming assembly reference 
-                    //'mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089' used by 'MiniBench.Core' matches identity 
-                    //'mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089' of 'mscorlib', you may need to supply runtime policy
-                    // see http://source.roslyn.codeplex.com/#Roslyn.Compilers.CSharp.Symbol.UnitTests/Compilation/ReferenceManagerTests.cs
-                    // and http://source.roslyn.codeplex.com/#Roslyn.Test.Utilities/TestBase.cs,d7b20a77e5912080
-                    // and http://source.roslyn.codeplex.com/#Roslyn.Compilers.CSharp.Symbol.UnitTests/Compilation/ReferenceManagerTests.cs,a90d68f18e804c1a,references
+            var standardReferences = new List<MetadataReference>(16);
+            if (projectSettings.TargetFrameworkVersion == LanguageVersion.CSharp2 ||
+                projectSettings.TargetFrameworkVersion == LanguageVersion.CSharp3)
+            {
+                //We have to read the dll's from disk as a Stream and create a MetadataReference from that.
+                //If we use MetadataReference.CreateFromAssembly(..) the .NET 4.0 versions are used instead.
+                var runtimeDlls = new[]
+                    {
+                        // TODO C:\Windows\Microsoft.NET\Framework64 or just \Framework ?!?
+                        @"C:\Windows\Microsoft.NET\Framework\v2.0.50727\mscorlib.dll",
+                        @"C:\Windows\Microsoft.NET\Framework\v2.0.50727\System.dll"
+                    };
 
-                    //MetadataReference.CreateFromAssembly(typeof(String).Assembly),
-                    MetadataReference.CreateFromAssembly(Assembly.Load("mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")),
-                    //MetadataReference.CreateFromAssembly(Assembly.LoadFile(@"C:\Windows\Microsoft.NET\Framework64\v2.0.50727\mscorlib.dll")),
-                    //MetadataReference.CreateFromAssembly(Assembly.LoadFrom(@"C:\Windows\Microsoft.NET\Framework64\v2.0.50727\mscorlib.dll")),
-                    //MetadataReference.CreateFromAssembly(Assembly.LoadFrom(@"C:\Windows\Microsoft.NET\Framework\v2.0.50727\mscorlib.dll")),
+                foreach (var runtimeDll in runtimeDlls)
+                {
+                    using (var fileStream = File.OpenRead(runtimeDll))
+                    {
+                        standardReferences.Add(MetadataReference.CreateFromStream(fileStream, filePath: runtimeDll));
+                    }
+                }
+            }
+            else
+            {
+                // As MiniBench.exe runs as a .NET 4.0 (or 4.5) process (due to the Roslyn dependancy)
+                // We can just get the .NET 4.0 runtimes components in the normal way
+                // Using typeof(..) means it get's the best match for us, for instance from the GAC
 
-                    // In here we include any other parts of the .NET framework that we need
-                    MetadataReference.CreateFromAssembly(typeof(System.Diagnostics.Stopwatch).Assembly),
-                };
+                // This pulls in mscorlib.dll 
+                standardReferences.Add(MetadataReference.CreateFromAssembly(typeof(String).Assembly));
+                // This pulls in System.dll
+                standardReferences.Add(MetadataReference.CreateFromAssembly(typeof(Stopwatch).Assembly));
+                // This pulls in System.Core, i.e. the stuff you need for LINQ
+                standardReferences.Add(MetadataReference.CreateFromAssembly(typeof(System.Linq.Enumerable).Assembly));
+            }
 
             // Now add the references we need from the .csproj file
             foreach (var reference in projectSettings.References)
@@ -255,14 +269,14 @@ namespace MiniBench
                 // <Reference Include="System" />
                 // <Reference Include="System.Data" />
                 // <Reference Include="System.Xml" />
-                // At the moment we only deal with ones like this:
+                // TODO At the moment we only deal with ones like this:
                 // <Reference Include="xunit">
                 //     <HintPath>..\packages\xunit.1.9.2\lib\net20\xunit.dll</HintPath>
                 // </Reference>
-                // Also we seem to have problems when the version is specified, like so:
-                // MiniBench.Core, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL ..\packages\MiniBench.0.1.0-beta\lib\MiniBench.Core.dll
-                standardReferences.Add(MetadataReference.CreateFromFile(Path.Combine(projectSettings.RootFolder, reference.Item2)));
+                standardReferences.Add(MetadataReference.CreateFromFile(Path.GetFullPath(Path.Combine(projectSettings.RootFolder, reference.Item2))));
             }
+
+            Console.WriteLine("\nAdding References:\n\t" + String.Join("\n\t", standardReferences.Select(r => r.Display)));
 
             return standardReferences;
         }
